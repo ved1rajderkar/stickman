@@ -37,6 +37,9 @@
                 <button id="btn-settings" class="menu-btn px-8 py-3 bg-gray-600 hover:bg-gray-500 text-white font-bold rounded-lg transition-all duration-200 hover:scale-105 hover:shadow-[0_0_20px_rgba(107,114,128,0.6)]" style="font-family: 'Orbitron', sans-serif;">
                     SETTINGS
                 </button>
+                <button id="btn-shop" class="menu-btn px-8 py-3 bg-yellow-600 hover:bg-yellow-500 text-white font-bold rounded-lg transition-all duration-200 hover:scale-105 hover:shadow-[0_0_20px_rgba(234,179,8,0.6)]" style="font-family: 'Orbitron', sans-serif;">
+                    SHOP 🪙
+                </button>
             </div>
             
             <p class="mt-12 text-gray-500 text-sm" style="font-family: 'Orbitron', sans-serif;">Press any key to start</p>
@@ -193,6 +196,65 @@
             </p>
             <p id="ko-subtext" class="text-2xl text-white" style="font-family: 'Orbitron', sans-serif;"></p>
             <p id="ko-special" class="text-xl text-yellow-400 mt-2 hidden" style="font-family: 'Press Start 2P', cursive;"></p>
+            <div id="gold-reward-display" class="mt-4 text-yellow-400 text-lg hidden" style="font-family: 'Orbitron', sans-serif;"></div>
+            <button id="btn-watch-ad-double" class="mt-4 px-6 py-2 bg-yellow-600 hover:bg-yellow-500 text-white font-bold rounded-lg hidden transition-all duration-200 hover:scale-105" style="font-family: 'Orbitron', sans-serif;">
+                ▶ WATCH AD — Double Gold!
+            </button>
+        </div>
+
+        <!-- Shop Overlay -->
+        <div id="shop-overlay" class="absolute inset-0 flex flex-col items-center bg-black/95 z-30 hidden overflow-y-auto">
+            <h2 class="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500 mt-8 mb-2" style="font-family: 'Press Start 2P', cursive;">
+                ARMORY
+            </h2>
+            <p id="shop-gold-display" class="text-yellow-400 text-xl mb-8" style="font-family: 'Orbitron', sans-serif;">🪙 0</p>
+
+            <h3 class="text-xl text-white mb-4" style="font-family: 'Orbitron', sans-serif;">WEAPONS</h3>
+            <div id="shop-weapons" class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8 px-4">
+            </div>
+
+            <h3 class="text-xl text-white mb-4" style="font-family: 'Orbitron', sans-serif;">STAGES</h3>
+            <div id="shop-stages" class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8 px-4">
+            </div>
+
+            <button id="btn-shop-back" class="mb-8 px-8 py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-lg transition-all duration-200 hover:scale-105" style="font-family: 'Orbitron', sans-serif;">
+                BACK
+            </button>
+        </div>
+
+        <!-- Revive Offer Overlay -->
+        <div id="revive-offer" class="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-30 hidden">
+            <h3 class="text-3xl font-black text-white mb-4" style="font-family: 'Press Start 2P', cursive;">CONTINUE?</h3>
+            <p class="text-lg text-gray-300 mb-6" style="font-family: 'Orbitron', sans-serif;">Watch a short ad to revive with 30 HP</p>
+            <button id="btn-watch-ad-revive" class="px-8 py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg mb-4 transition-all duration-200 hover:scale-105" style="font-family: 'Orbitron', sans-serif;">
+                ▶ WATCH AD (Revive)
+            </button>
+            <button id="btn-gold-revive" class="px-8 py-3 bg-yellow-600 hover:bg-yellow-500 text-white font-bold rounded-lg mb-4 transition-all duration-200 hover:scale-105" style="font-family: 'Orbitron', sans-serif;">
+                🪙 50 Gold Revive
+            </button>
+            <button id="btn-no-revive" class="px-8 py-3 bg-gray-600 hover:bg-gray-500 text-white font-bold rounded-lg transition-all duration-200 hover:scale-105" style="font-family: 'Orbitron', sans-serif;">
+                Give Up
+            </button>
+        </div>
+
+        <!-- Mobile Controls Overlay -->
+        <div id="mobile-controls" class="hidden absolute inset-0 pointer-events-none z-5">
+            <div id="dpad-zone" class="absolute bottom-8 left-8 pointer-events-auto">
+                <div class="relative w-32 h-32">
+                    <button id="m-left" class="mobile-btn absolute left-0 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/20 rounded-lg text-white text-xl flex items-center justify-center">◀</button>
+                    <button id="m-right" class="mobile-btn absolute right-0 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/20 rounded-lg text-white text-xl flex items-center justify-center">▶</button>
+                    <button id="m-jump" class="mobile-btn absolute top-0 left-1/2 -translate-x-1/2 w-10 h-10 bg-white/20 rounded-lg text-white text-xl flex items-center justify-center">▲</button>
+                    <button id="m-down" class="mobile-btn absolute bottom-0 left-1/2 -translate-x-1/2 w-10 h-10 bg-white/20 rounded-lg text-white text-xl flex items-center justify-center">▼</button>
+                </div>
+            </div>
+            <div id="action-zone" class="absolute bottom-8 right-8 pointer-events-auto">
+                <div class="relative w-40 h-32">
+                    <button id="m-light" class="mobile-btn absolute right-0 bottom-0 w-12 h-12 bg-red-500/70 rounded-full text-white font-bold text-xs">ATK</button>
+                    <button id="m-heavy" class="mobile-btn absolute right-14 bottom-0 w-12 h-12 bg-orange-500/70 rounded-full text-white font-bold text-xs">HVY</button>
+                    <button id="m-special" class="mobile-btn absolute right-7 bottom-14 w-12 h-12 bg-purple-500/70 rounded-full text-white font-bold text-xs">SP</button>
+                    <button id="m-block" class="mobile-btn absolute right-0 bottom-14 w-12 h-12 bg-blue-500/70 rounded-full text-white font-bold text-xs">BLK</button>
+                </div>
+            </div>
         </div>
     </div>
 

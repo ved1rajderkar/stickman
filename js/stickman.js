@@ -2,19 +2,33 @@ export class StickMan {
     constructor(color, glowColor) {
         this.color = color;
         this.glowColor = glowColor;
-        this.animState = {
-            leftArmAngle: 0,
-            rightArmAngle: 0,
-            leftLegAngle: 0,
-            rightLegAngle: 0,
-            torsoLean: 0,
-            headBob: 0
-        };
-        this.targetState = { ...this.animState };
-        this.lerpSpeed = 0.2;
+
+        this.leftArmAngle = 0;
+        this.rightArmAngle = 0;
+        this.leftLegAngle = 0;
+        this.rightLegAngle = 0;
+        this.torsoLean = 0;
+        this.headBob = 0;
+
+        this.leftArmAngleVel = 0;
+        this.rightArmAngleVel = 0;
+        this.leftLegAngleVel = 0;
+        this.rightLegAngleVel = 0;
+        this.torsoLeanVel = 0;
+        this.headBobVel = 0;
+
+        this.leftArmTarget = 0;
+        this.rightArmTarget = 0;
+        this.leftLegTarget = 0;
+        this.rightLegTarget = 0;
+        this.torsoTarget = 0;
+        this.headTarget = 0;
+
+        this.stiffness = 0.2;
+        this.damping = 0.8;
+
         this.breathCycle = 0;
-        this.attackPhaseAngles = null;
-        this.lerpSpeedOverride = null;
+        this.currentAnim = 'IDLE';
     }
 
     setColor(color, glowColor) {
@@ -22,7 +36,79 @@ export class StickMan {
         this.glowColor = glowColor;
     }
 
+    springAngle(current, target, velocity, stiffness, damping) {
+        const force = (target - current) * stiffness;
+        velocity += force;
+        velocity *= damping;
+        current += velocity;
+        return { angle: current, vel: velocity };
+    }
+
+    update() {
+        this.breathCycle += 0.05;
+
+        let s = this.stiffness;
+        let d = this.damping;
+
+        if (this.currentAnim === 'IDLE') {
+            s = 0.04; d = 0.85;
+        } else if (this.currentAnim === 'WALK') {
+            s = 0.12; d = 0.78;
+        } else if (this.currentAnim === 'JUMP') {
+            s = 0.20; d = 0.70;
+        } else if (this.currentAnim === 'FALL') {
+            s = 0.15; d = 0.75;
+        } else if (this.currentAnim === 'ATTACK_LIGHT') {
+            s = 0.95; d = 0.60;
+        } else if (this.currentAnim === 'ATTACK_HEAVY') {
+            s = 1.0; d = 0.50;
+        } else if (this.currentAnim === 'BLOCK') {
+            s = 0.15; d = 0.80;
+        } else if (this.currentAnim === 'HIT') {
+            s = 0.90; d = 0.55;
+        } else if (this.currentAnim === 'DEATH') {
+            s = 0.02; d = 0.92;
+        } else if (this.currentAnim === 'SPECIAL') {
+            s = 0.8; d = 0.55;
+        }
+
+        const la = this.springAngle(this.leftArmAngle, this.leftArmTarget, this.leftArmAngleVel, s, d);
+        this.leftArmAngle = la.angle;
+        this.leftArmAngleVel = la.vel;
+
+        const ra = this.springAngle(this.rightArmAngle, this.rightArmTarget, this.rightArmAngleVel, s, d);
+        this.rightArmAngle = ra.angle;
+        this.rightArmAngleVel = ra.vel;
+
+        const ll = this.springAngle(this.leftLegAngle, this.leftLegTarget, this.leftLegAngleVel, s, d);
+        this.leftLegAngle = ll.angle;
+        this.leftLegAngleVel = ll.vel;
+
+        const rl = this.springAngle(this.rightLegAngle, this.rightLegTarget, this.rightLegAngleVel, s, d);
+        this.rightLegAngle = rl.angle;
+        this.rightLegAngleVel = rl.vel;
+
+        const tl = this.springAngle(this.torsoLean, this.torsoTarget, this.torsoLeanVel, s, d);
+        this.torsoLean = tl.angle;
+        this.torsoLeanVel = tl.vel;
+
+        const hb = this.springAngle(this.headBob, this.headTarget, this.headBobVel, s, d);
+        this.headBob = hb.angle;
+        this.headBobVel = hb.vel;
+    }
+
+    applyHitImpulse(attackerFacingDir, damage) {
+        this.torsoLeanVel += attackerFacingDir * (damage / 15);
+        this.headBobVel += attackerFacingDir * (damage / 10);
+        this.leftArmAngleVel -= (damage / 20);
+        this.rightArmAngleVel += (damage / 20);
+        this.leftLegAngleVel += (damage / 25);
+        this.rightLegAngleVel -= (damage / 25);
+    }
+
     setAnimation(animName, facingDir = 1, frame = 0, weaponName = 'Fists', isHeavy = false) {
+        this.currentAnim = animName;
+
         const animations = {
             IDLE: {
                 leftArmAngle: 0.3 + Math.sin(this.breathCycle) * 0.05,
@@ -85,17 +171,26 @@ export class StickMan {
         if (animName === 'ATTACK_LIGHT' || animName === 'ATTACK_HEAVY') {
             this.setAttackAnimation(animName, facingDir, frame, weaponName, isHeavy);
         } else if (animName === 'SPECIAL') {
-            this.targetState = {
+            this.setTargets({
                 leftArmAngle: -1.5 + Math.sin(frame * 0.4) * 0.5,
                 rightArmAngle: 1.5 - Math.sin(frame * 0.4) * 0.5,
                 leftLegAngle: -0.3,
                 rightLegAngle: 0.3,
                 torsoLean: 0.2 * facingDir,
                 headBob: Math.sin(frame * 0.4) * 4
-            };
+            });
         } else {
-            this.targetState = animations[animName] || animations.IDLE;
+            this.setTargets(animations[animName] || animations.IDLE);
         }
+    }
+
+    setTargets(t) {
+        this.leftArmTarget = t.leftArmAngle;
+        this.rightArmTarget = t.rightArmAngle;
+        this.leftLegTarget = t.leftLegAngle;
+        this.rightLegTarget = t.rightLegAngle;
+        this.torsoTarget = t.torsoLean;
+        this.headTarget = t.headBob;
     }
 
     setAttackAnimation(animName, facingDir, frame, weaponName, isHeavy) {
@@ -106,293 +201,276 @@ export class StickMan {
             if (isLight) {
                 if (frame <= 4) {
                     const t = frame / 4;
-                    this.targetState = {
+                    this.setTargets({
                         leftArmAngle: fd === 1 ? 0.3 - t * 0.7 : -0.3 + t * 0.7,
                         rightArmAngle: fd === 1 ? -0.3 - t * 0.7 : 0.3 + t * 0.7,
                         leftLegAngle: 0.1 + t * 0.05,
                         rightLegAngle: -0.1 - t * 0.05,
                         torsoLean: -0.1 * fd * t,
                         headBob: -2 * t
-                    };
+                    });
                 } else if (frame <= 9) {
                     const t = (frame - 4) / 5;
-                    this.targetState = {
+                    this.setTargets({
                         leftArmAngle: fd === 1 ? -0.4 + t * 0.7 : 0.4 - t * 0.7,
                         rightArmAngle: fd === 1 ? -1.0 + t * 1.3 : 1.0 - t * 1.3,
                         leftLegAngle: 0.15 - t * 0.1,
                         rightLegAngle: -0.15 + t * 0.1,
                         torsoLean: 0.15 * fd * t,
                         headBob: -2 + t * 2
-                    };
+                    });
                 } else {
                     const t = (frame - 9) / 9;
-                    this.targetState = {
+                    this.setTargets({
                         leftArmAngle: 0.3 * (1 - t) + (fd === 1 ? -0.4 : 0.4) * t,
                         rightArmAngle: -0.3 * (1 - t) + (fd === 1 ? -1.0 : 1.0) * t,
                         leftLegAngle: 0.05 * (1 - t) + 0.1 * t,
                         rightLegAngle: -0.05 * (1 - t) - 0.1 * t,
                         torsoLean: 0.15 * fd * (1 - t),
                         headBob: 0
-                    };
+                    });
                 }
             } else {
                 if (frame <= 8) {
                     const t = frame / 8;
-                    this.targetState = {
+                    this.setTargets({
                         leftArmAngle: fd === 1 ? 0.3 - t * 0.5 : -0.3 + t * 0.5,
                         rightArmAngle: fd === 1 ? -0.3 - t * 1.0 : 0.3 + t * 1.0,
                         leftLegAngle: 0.1 + t * 0.15,
                         rightLegAngle: -0.1 - t * 0.15,
                         torsoLean: -0.25 * fd * t,
                         headBob: -5 * t
-                    };
+                    });
                 } else if (frame <= 14) {
                     const t = (frame - 8) / 6;
-                    this.targetState = {
+                    this.setTargets({
                         leftArmAngle: fd === 1 ? -0.2 + t * 0.5 : 0.2 - t * 0.5,
                         rightArmAngle: fd === 1 ? -1.3 + t * 1.8 : 1.3 - t * 1.8,
                         leftLegAngle: 0.25 - t * 0.15,
                         rightLegAngle: -0.25 + t * 0.15,
                         torsoLean: 0.35 * fd * t,
                         headBob: -5 + t * 8
-                    };
+                    });
                 } else {
                     const t = (frame - 14) / 14;
-                    this.targetState = {
+                    this.setTargets({
                         leftArmAngle: 0.3 * (1 - t) + (fd === 1 ? -0.2 : 0.2) * t,
                         rightArmAngle: -0.3 * (1 - t) + (fd === 1 ? -1.3 : 1.3) * t,
                         leftLegAngle: 0.1 * (1 - t) + 0.1 * t,
                         rightLegAngle: -0.1 * (1 - t) - 0.1 * t,
                         torsoLean: 0.35 * fd * (1 - t),
                         headBob: 3 * (1 - t)
-                    };
+                    });
                 }
             }
         } else if (weaponName === 'Katana') {
             if (isLight) {
                 if (frame <= 4) {
                     const t = frame / 4;
-                    this.targetState = {
+                    this.setTargets({
                         rightArmAngle: -0.3 - t * 1.2,
                         leftArmAngle: 0.3 + t * 0.3,
                         leftLegAngle: 0.1 + t * 0.1,
                         rightLegAngle: -0.1 - t * 0.1,
                         torsoLean: -0.15 * fd * t,
                         headBob: -3 * t
-                    };
+                    });
                 } else if (frame <= 10) {
                     const t = (frame - 4) / 6;
-                    this.targetState = {
+                    this.setTargets({
                         rightArmAngle: -1.5 + t * 2.1,
                         leftArmAngle: 0.6 - t * 0.3,
                         leftLegAngle: 0.2 - t * 0.1,
                         rightLegAngle: -0.2 + t * 0.1,
                         torsoLean: 0.2 * fd * t,
                         headBob: -3 + t * 3
-                    };
+                    });
                 } else {
                     const t = (frame - 10) / 6;
-                    this.targetState = {
+                    this.setTargets({
                         rightArmAngle: 0.6 * (1 - t) - 0.3 * t,
                         leftArmAngle: 0.3 * (1 - t) + 0.3 * t,
                         leftLegAngle: 0.1 * (1 - t) + 0.1 * t,
                         rightLegAngle: -0.1 * (1 - t) - 0.1 * t,
                         torsoLean: 0.2 * fd * (1 - t),
                         headBob: 0
-                    };
+                    });
                 }
             } else {
                 if (frame <= 7) {
                     const t = frame / 7;
-                    this.targetState = {
+                    this.setTargets({
                         rightArmAngle: -0.3 - t * 1.5,
                         leftArmAngle: 0.3 + t * 0.5,
                         leftLegAngle: 0.1 + t * 0.2,
                         rightLegAngle: -0.1 - t * 0.2,
                         torsoLean: -0.25 * fd * t,
                         headBob: -5 * t
-                    };
+                    });
                 } else if (frame <= 15) {
                     const t = (frame - 7) / 8;
-                    this.targetState = {
+                    this.setTargets({
                         rightArmAngle: -1.8 + t * 2.8,
                         leftArmAngle: 0.8 - t * 0.5,
                         leftLegAngle: 0.3 - t * 0.2,
                         rightLegAngle: -0.3 + t * 0.2,
                         torsoLean: 0.3 * fd * t,
                         headBob: -5 + t * 5
-                    };
+                    });
                 } else {
                     const t = (frame - 15) / 9;
-                    this.targetState = {
+                    this.setTargets({
                         rightArmAngle: 1.0 * (1 - t) - 0.3 * t,
                         leftArmAngle: 0.3 * (1 - t) + 0.3 * t,
                         leftLegAngle: 0.1 * (1 - t) + 0.1 * t,
                         rightLegAngle: -0.1 * (1 - t) - 0.1 * t,
                         torsoLean: 0.3 * fd * (1 - t),
                         headBob: 0
-                    };
+                    });
                 }
             }
         } else if (weaponName === 'Baseball Bat') {
             if (isLight) {
                 if (frame <= 5) {
                     const t = frame / 5;
-                    this.targetState = {
+                    this.setTargets({
                         rightArmAngle: -0.3 - t * 1.4,
                         leftArmAngle: 0.3 + t * 0.4,
                         leftLegAngle: 0.1 + t * 0.15,
                         rightLegAngle: -0.1 - t * 0.15,
                         torsoLean: -0.2 * fd * t,
                         headBob: -4 * t
-                    };
+                    });
                 } else if (frame <= 11) {
                     const t = (frame - 5) / 6;
-                    this.targetState = {
+                    this.setTargets({
                         rightArmAngle: -1.7 + t * 2.2,
                         leftArmAngle: 0.7 - t * 0.4,
                         leftLegAngle: 0.25 - t * 0.15,
                         rightLegAngle: -0.25 + t * 0.15,
                         torsoLean: 0.25 * fd * t,
                         headBob: -4 + t * 4
-                    };
+                    });
                 } else {
                     const t = (frame - 11) / 7;
-                    this.targetState = {
+                    this.setTargets({
                         rightArmAngle: 0.5 * (1 - t) - 0.3 * t,
                         leftArmAngle: 0.3 * (1 - t) + 0.3 * t,
                         leftLegAngle: 0.1 * (1 - t) + 0.1 * t,
                         rightLegAngle: -0.1 * (1 - t) - 0.1 * t,
                         torsoLean: 0.25 * fd * (1 - t),
                         headBob: 0
-                    };
+                    });
                 }
             } else {
                 if (frame <= 8) {
                     const t = frame / 8;
-                    this.targetState = {
+                    this.setTargets({
                         rightArmAngle: -0.3 - t * 1.7,
                         leftArmAngle: 0.3 + t * 0.5,
                         leftLegAngle: 0.1 + t * 0.25,
                         rightLegAngle: -0.1 - t * 0.25,
                         torsoLean: -0.3 * fd * t,
                         headBob: -6 * t
-                    };
+                    });
                 } else if (frame <= 16) {
                     const t = (frame - 8) / 8;
-                    this.targetState = {
+                    this.setTargets({
                         rightArmAngle: -2.0 + t * 3.0,
                         leftArmAngle: 0.8 - t * 0.5,
                         leftLegAngle: 0.35 - t * 0.25,
                         rightLegAngle: -0.35 + t * 0.25,
                         torsoLean: 0.35 * fd * t,
                         headBob: -6 + t * 6
-                    };
+                    });
                 } else {
                     const t = (frame - 16) / 10;
-                    this.targetState = {
+                    this.setTargets({
                         rightArmAngle: 1.0 * (1 - t) - 0.3 * t,
                         leftArmAngle: 0.3 * (1 - t) + 0.3 * t,
                         leftLegAngle: 0.1 * (1 - t) + 0.1 * t,
                         rightLegAngle: -0.1 * (1 - t) - 0.1 * t,
                         torsoLean: 0.35 * fd * (1 - t),
                         headBob: 0
-                    };
+                    });
                 }
             }
         } else if (weaponName === 'Pistol') {
             if (isLight) {
                 if (frame <= 2) {
                     const t = frame / 2;
-                    this.targetState = {
+                    this.setTargets({
                         rightArmAngle: -0.3 - t * 0.5,
                         leftArmAngle: 0.3 + t * 0.2,
                         leftLegAngle: 0.1,
                         rightLegAngle: -0.1,
                         torsoLean: 0.05 * fd * t,
                         headBob: -1 * t
-                    };
+                    });
                 } else if (frame <= 6) {
                     const t = (frame - 2) / 4;
-                    this.targetState = {
+                    this.setTargets({
                         rightArmAngle: -0.8 + t * 0.5,
                         leftArmAngle: 0.5 - t * 0.2,
                         leftLegAngle: 0.1,
                         rightLegAngle: -0.1,
                         torsoLean: 0.05 * fd,
                         headBob: -1 + t
-                    };
+                    });
                 } else {
                     const t = (frame - 6) / 6;
-                    this.targetState = {
+                    this.setTargets({
                         rightArmAngle: -0.3 * (1 - t) - 0.3 * t,
                         leftArmAngle: 0.3 * (1 - t) + 0.3 * t,
                         leftLegAngle: 0.1,
                         rightLegAngle: -0.1,
                         torsoLean: 0.05 * fd * (1 - t),
                         headBob: 0
-                    };
+                    });
                 }
             } else {
                 if (frame <= 3) {
                     const t = frame / 3;
-                    this.targetState = {
+                    this.setTargets({
                         rightArmAngle: -0.3 - t * 0.6,
                         leftArmAngle: 0.3 + t * 0.3,
                         leftLegAngle: 0.1,
                         rightLegAngle: -0.1,
                         torsoLean: 0.08 * fd * t,
                         headBob: -2 * t
-                    };
+                    });
                 } else if (frame <= 8) {
                     const t = (frame - 3) / 5;
-                    this.targetState = {
+                    this.setTargets({
                         rightArmAngle: -0.9 + t * 0.6,
                         leftArmAngle: 0.6 - t * 0.3,
                         leftLegAngle: 0.1,
                         rightLegAngle: -0.1,
                         torsoLean: 0.08 * fd,
                         headBob: -2 + t * 2
-                    };
+                    });
                 } else {
                     const t = (frame - 8) / 8;
-                    this.targetState = {
+                    this.setTargets({
                         rightArmAngle: -0.3 * (1 - t) - 0.3 * t,
                         leftArmAngle: 0.3 * (1 - t) + 0.3 * t,
                         leftLegAngle: 0.1,
                         rightLegAngle: -0.1,
                         torsoLean: 0.08 * fd * (1 - t),
                         headBob: 0
-                    };
+                    });
                 }
             }
         } else {
-            this.targetState = {
+            this.setTargets({
                 leftArmAngle: fd === 1 ? -1.2 : 0.3,
                 rightArmAngle: fd === 1 ? 0.3 : -1.2,
                 leftLegAngle: 0.2,
                 rightLegAngle: -0.2,
                 torsoLean: 0.1 * fd,
                 headBob: 0
-            };
+            });
         }
-    }
-
-    lerp(current, target, speed) {
-        return current + (target - current) * speed;
-    }
-
-    update() {
-        this.breathCycle += 0.05;
-        const speed = this.lerpSpeedOverride || this.lerpSpeed;
-        this.lerpSpeedOverride = null;
-
-        this.animState.leftArmAngle = this.lerp(this.animState.leftArmAngle, this.targetState.leftArmAngle, speed);
-        this.animState.rightArmAngle = this.lerp(this.animState.rightArmAngle, this.targetState.rightArmAngle, speed);
-        this.animState.leftLegAngle = this.lerp(this.animState.leftLegAngle, this.targetState.leftLegAngle, speed);
-        this.animState.rightLegAngle = this.lerp(this.animState.rightLegAngle, this.targetState.rightLegAngle, speed);
-        this.animState.torsoLean = this.lerp(this.animState.torsoLean, this.targetState.torsoLean, speed);
-        this.animState.headBob = this.lerp(this.animState.headBob, this.targetState.headBob, speed);
     }
 
     getBodyPartPositions(ctx, x, y, facingDir, scale = 1) {
@@ -401,26 +479,26 @@ export class StickMan {
         const armLength = 35;
         const legLength = 40;
 
-        const headY = -torsoLength - headRadius + this.animState.headBob;
-        const torsoTopY = -torsoLength + this.animState.headBob;
-        const torsoBottomY = this.animState.headBob;
+        const headY = -torsoLength - headRadius + this.headBob;
+        const torsoTopY = -torsoLength + this.headBob;
+        const torsoBottomY = this.headBob;
         const shoulderY = torsoTopY + 5;
         const hipY = torsoBottomY;
 
-        const leftArmEndX = Math.cos(Math.PI / 2 + this.animState.leftArmAngle) * armLength;
-        const leftArmEndY = shoulderY + Math.sin(Math.PI / 2 + this.animState.leftArmAngle) * armLength;
-        const rightArmEndX = Math.cos(Math.PI / 2 + this.animState.rightArmAngle) * armLength;
-        const rightArmEndY = shoulderY + Math.sin(Math.PI / 2 + this.animState.rightArmAngle) * armLength;
+        const leftArmEndX = Math.cos(Math.PI / 2 + this.leftArmAngle) * armLength;
+        const leftArmEndY = shoulderY + Math.sin(Math.PI / 2 + this.leftArmAngle) * armLength;
+        const rightArmEndX = Math.cos(Math.PI / 2 + this.rightArmAngle) * armLength;
+        const rightArmEndY = shoulderY + Math.sin(Math.PI / 2 + this.rightArmAngle) * armLength;
 
-        const leftLegEndX = Math.cos(Math.PI / 2 + this.animState.leftLegAngle) * legLength;
-        const leftLegEndY = hipY + Math.sin(Math.PI / 2 + this.animState.leftLegAngle) * legLength;
-        const rightLegEndX = Math.cos(Math.PI / 2 + this.animState.rightLegAngle) * legLength;
-        const rightLegEndY = hipY + Math.sin(Math.PI / 2 + this.animState.rightLegAngle) * legLength;
+        const leftLegEndX = Math.cos(Math.PI / 2 + this.leftLegAngle) * legLength;
+        const leftLegEndY = hipY + Math.sin(Math.PI / 2 + this.leftLegAngle) * legLength;
+        const rightLegEndX = Math.cos(Math.PI / 2 + this.rightLegAngle) * legLength;
+        const rightLegEndY = hipY + Math.sin(Math.PI / 2 + this.rightLegAngle) * legLength;
 
         const fd = facingDir;
         const s = scale;
-        const cosLean = Math.cos(this.animState.torsoLean);
-        const sinLean = Math.sin(this.animState.torsoLean);
+        const cosLean = Math.cos(this.torsoLean);
+        const sinLean = Math.sin(this.torsoLean);
 
         const transformPoint = (px, py) => {
             const rx = px * cosLean - py * sinLean;
@@ -460,12 +538,12 @@ export class StickMan {
         const armLength = 35;
         const legLength = 40;
 
-        const headY = -torsoLength - headRadius + this.animState.headBob;
-        const torsoTopY = -torsoLength + this.animState.headBob;
-        const torsoBottomY = this.animState.headBob;
+        const headY = -torsoLength - headRadius + this.headBob;
+        const torsoTopY = -torsoLength + this.headBob;
+        const torsoBottomY = this.headBob;
 
         ctx.save();
-        ctx.rotate(this.animState.torsoLean);
+        ctx.rotate(this.torsoLean);
 
         ctx.beginPath();
         ctx.arc(0, headY, headRadius, 0, Math.PI * 2);
@@ -477,10 +555,10 @@ export class StickMan {
         ctx.stroke();
 
         const shoulderY = torsoTopY + 5;
-        const leftArmEndX = Math.cos(Math.PI / 2 + this.animState.leftArmAngle) * armLength;
-        const leftArmEndY = shoulderY + Math.sin(Math.PI / 2 + this.animState.leftArmAngle) * armLength;
-        const rightArmEndX = Math.cos(Math.PI / 2 + this.animState.rightArmAngle) * armLength;
-        const rightArmEndY = shoulderY + Math.sin(Math.PI / 2 + this.animState.rightArmAngle) * armLength;
+        const leftArmEndX = Math.cos(Math.PI / 2 + this.leftArmAngle) * armLength;
+        const leftArmEndY = shoulderY + Math.sin(Math.PI / 2 + this.leftArmAngle) * armLength;
+        const rightArmEndX = Math.cos(Math.PI / 2 + this.rightArmAngle) * armLength;
+        const rightArmEndY = shoulderY + Math.sin(Math.PI / 2 + this.rightArmAngle) * armLength;
 
         ctx.beginPath();
         ctx.moveTo(0, shoulderY);
@@ -493,10 +571,10 @@ export class StickMan {
         ctx.stroke();
 
         const hipY = torsoBottomY;
-        const leftLegEndX = Math.cos(Math.PI / 2 + this.animState.leftLegAngle) * legLength;
-        const leftLegEndY = hipY + Math.sin(Math.PI / 2 + this.animState.leftLegAngle) * legLength;
-        const rightLegEndX = Math.cos(Math.PI / 2 + this.animState.rightLegAngle) * legLength;
-        const rightLegEndY = hipY + Math.sin(Math.PI / 2 + this.animState.rightLegAngle) * legLength;
+        const leftLegEndX = Math.cos(Math.PI / 2 + this.leftLegAngle) * legLength;
+        const leftLegEndY = hipY + Math.sin(Math.PI / 2 + this.leftLegAngle) * legLength;
+        const rightLegEndX = Math.cos(Math.PI / 2 + this.rightLegAngle) * legLength;
+        const rightLegEndY = hipY + Math.sin(Math.PI / 2 + this.rightLegAngle) * legLength;
 
         ctx.beginPath();
         ctx.moveTo(0, hipY);
@@ -509,7 +587,7 @@ export class StickMan {
         ctx.stroke();
 
         if (weapon && player) {
-            this.drawWeapon(ctx, rightArmEndX, rightArmEndY, this.animState.rightArmAngle, facingDir, weapon, player);
+            this.drawWeapon(ctx, rightArmEndX, rightArmEndY, this.rightArmAngle, facingDir, weapon, player);
         }
 
         ctx.restore();

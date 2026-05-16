@@ -375,6 +375,8 @@ export class Player {
             this.stateTimer = 18;
             this.animFrame = 0;
 
+            this.stickman.applyHitImpulse(attacker ? attacker.facingDir : 1, finalDamage);
+
             if (attacker) {
                 attacker.comboCount++;
                 attacker.comboTimer = 60;

@@ -6,6 +6,8 @@ import { AIController } from './ai.js';
 import { Fists, Katana, BaseballBat, Pistol, Bullet, ShellCasing } from './weapons.js';
 import { FLOOR_Y, LEFT_WALL, RIGHT_WALL, CANVAS_WIDTH, CANVAS_HEIGHT, platforms, checkHitboxOverlap, calculateKnockback, resolvePlayerCollision } from './physics.js';
 import { StickMan } from './stickman.js';
+import { Economy, SHOP_ITEMS, showRewardedAd } from './economy.js';
+import { soundManager } from './sound.js';
 
 const GameState = {
     MENU: 'MENU',
@@ -15,7 +17,8 @@ const GameState = {
     ROUND_END: 'ROUND_END',
     GAME_OVER: 'GAME_OVER',
     PAUSED: 'PAUSED',
-    SETTINGS: 'SETTINGS'
+    SETTINGS: 'SETTINGS',
+    SHOP: 'SHOP'
 };
 
 const COLORS = [
@@ -79,6 +82,10 @@ class Game {
         this.weaponTrails = [];
         this.floatingTexts = [];
         this.hitStopFrames = 0;
+
+        this.lastMatchReward = 0;
+        this.survivalWave = 0;
+        this.survivalComboMax = 0;
 
         this.settings = {
             timer: 60,
@@ -184,8 +191,62 @@ class Game {
                     this.pauseGame();
                 } else if (this.state === GameState.PAUSED) {
                     this.resumeGame();
+                } else if (this.state === GameState.SHOP) {
+                    this.hideShop();
                 }
             }
+            soundManager.init();
+        });
+
+        document.addEventListener('click', () => soundManager.init(), { once: true });
+
+        document.getElementById('btn-shop').addEventListener('click', () => this.showShop());
+        document.getElementById('btn-shop-back').addEventListener('click', () => this.hideShop());
+
+        document.getElementById('btn-watch-ad-revive').addEventListener('click', () => {
+            soundManager.muteForAd();
+            showRewardedAd(() => {
+                soundManager.unmuteAfterAd();
+                if (this.player1 && this.player1.hp <= 0) {
+                    this.player1.hp = 30;
+                    this.player1.state = PlayerState.IDLE;
+                    this.player1.deathAlpha = 1.0;
+                }
+                document.getElementById('revive-offer').classList.add('hidden');
+                this.state = GameState.FIGHTING;
+            });
+        });
+
+        document.getElementById('btn-gold-revive').addEventListener('click', () => {
+            if (Economy.spendGold(50)) {
+                soundManager.synthGoldPickup();
+                if (this.player1 && this.player1.hp <= 0) {
+                    this.player1.hp = 30;
+                    this.player1.state = PlayerState.IDLE;
+                    this.player1.deathAlpha = 1.0;
+                }
+                document.getElementById('revive-offer').classList.add('hidden');
+                this.state = GameState.FIGHTING;
+            }
+        });
+
+        document.getElementById('btn-no-revive').addEventListener('click', () => {
+            document.getElementById('revive-offer').classList.add('hidden');
+        });
+
+        document.getElementById('btn-watch-ad-double').addEventListener('click', () => {
+            soundManager.muteForAd();
+            showRewardedAd(() => {
+                soundManager.unmuteAfterAd();
+                Economy.addGold(this.lastMatchReward || 0);
+                soundManager.synthGoldPickup();
+                document.getElementById('btn-watch-ad-double').classList.add('hidden');
+                this.updateGoldDisplay();
+            });
+        });
+
+        document.getElementById('setting-volume').addEventListener('input', (e) => {
+            soundManager.setVolume(parseInt(e.target.value));
         });
     }
 
@@ -284,6 +345,82 @@ class Game {
     updateFightButton() {
         const btn = document.getElementById('btn-fight');
         btn.disabled = !(this.p1Selected && this.p2Selected);
+    }
+
+    updateGoldDisplay() {
+        const goldEl = document.getElementById('shop-gold-display');
+        if (goldEl) goldEl.textContent = `🪙 ${Economy.getGold()}`;
+    }
+
+    showShop() {
+        this.state = GameState.SHOP;
+        document.getElementById('shop-overlay').classList.remove('hidden');
+        this.updateGoldDisplay();
+        this.renderShop();
+        soundManager.synthUIClick();
+    }
+
+    hideShop() {
+        document.getElementById('shop-overlay').classList.add('hidden');
+        this.state = GameState.MENU;
+        soundManager.synthUIClick();
+    }
+
+    renderShop() {
+        const weaponsDiv = document.getElementById('shop-weapons');
+        const stagesDiv = document.getElementById('shop-stages');
+        weaponsDiv.innerHTML = '';
+        stagesDiv.innerHTML = '';
+
+        SHOP_ITEMS.weapons.forEach(item => {
+            const owned = Economy.isUnlocked(item.id);
+            const canAfford = Economy.getGold() >= item.price;
+            const div = document.createElement('div');
+            div.className = `shop-item ${owned ? 'owned' : 'locked'}`;
+            div.innerHTML = `
+                <p class="text-white font-bold text-sm" style="font-family: 'Orbitron', sans-serif;">${item.name}</p>
+                <p class="text-gray-400 text-xs mt-1">${item.desc}</p>
+                ${owned
+                    ? '<p class="text-green-400 mt-2 font-bold" style="font-family: Orbitron;">OWNED ✓</p>'
+                    : `<button class="shop-buy-btn mt-2 px-4 py-1 rounded text-sm font-bold ${canAfford ? 'bg-green-600 hover:bg-green-500' : 'bg-gray-600 cursor-not-allowed'} text-white" data-id="${item.id}" data-price="${item.price}">🪙 ${item.price}</button>`
+                }
+            `;
+            weaponsDiv.appendChild(div);
+        });
+
+        SHOP_ITEMS.stages.forEach(item => {
+            const owned = Economy.isUnlocked(item.id);
+            const canAfford = Economy.getGold() >= item.price;
+            const div = document.createElement('div');
+            div.className = `shop-item ${owned ? 'owned' : 'locked'}`;
+            div.innerHTML = `
+                <p class="text-white font-bold text-sm" style="font-family: 'Orbitron', sans-serif;">${item.name}</p>
+                <p class="text-gray-400 text-xs mt-1">${item.desc}</p>
+                ${owned
+                    ? '<p class="text-green-400 mt-2 font-bold" style="font-family: Orbitron;">OWNED ✓</p>'
+                    : `<button class="shop-buy-btn mt-2 px-4 py-1 rounded text-sm font-bold ${canAfford ? 'bg-green-600 hover:bg-green-500' : 'bg-gray-600 cursor-not-allowed'} text-white" data-id="${item.id}" data-price="${item.price}">🪙 ${item.price}</button>`
+                }
+            `;
+            stagesDiv.appendChild(div);
+        });
+
+        weaponsDiv.querySelectorAll('.shop-buy-btn').forEach(btn => {
+            btn.addEventListener('click', () => this.buyItem(btn.dataset.id, parseInt(btn.dataset.price)));
+        });
+        stagesDiv.querySelectorAll('.shop-buy-btn').forEach(btn => {
+            btn.addEventListener('click', () => this.buyItem(btn.dataset.id, parseInt(btn.dataset.price)));
+        });
+    }
+
+    buyItem(itemId, price) {
+        if (Economy.isUnlocked(itemId)) return;
+        if (Economy.spendGold(price)) {
+            Economy.unlock(itemId);
+            soundManager.synthGoldPickup();
+            this.renderShop();
+        } else {
+            soundManager.synthBlock();
+        }
     }
 
     drawPreview(canvasId, color, anim) {
@@ -744,19 +881,37 @@ class Game {
             }
         }
 
+        const winner = p2Dead || (!p1Dead && this.player1.hp > this.player2.hp) ? 'PLAYER 1' : 'PLAYER 2';
+        const winColor = p2Dead || (!p1Dead && this.player1.hp > this.player2.hp) ? this.p1Color.color : this.p2Color.color;
+
+        let base = 15;
+        if (winner === 'PLAYER 1') base += 25;
+        base += Math.floor(this.player1.comboCount / 3) * 5;
+        base += this.p1Wins * 10;
+        if (p2Dead) base += 15;
+
+        this.lastMatchReward = base;
+        Economy.addGold(base);
+        soundManager.synthGoldPickup();
+
         const koScreen = document.getElementById('ko-screen');
         const koText = document.getElementById('ko-text');
         const koSubtext = document.getElementById('ko-subtext');
         const koSpecial = document.getElementById('ko-special');
+        const goldDisplay = document.getElementById('gold-reward-display');
+        const adDoubleBtn = document.getElementById('btn-watch-ad-double');
 
         koScreen.classList.remove('hidden');
         koText.classList.add('slam-in');
 
-        const winner = p2Dead || (!p1Dead && this.player1.hp > this.player2.hp) ? 'PLAYER 1' : 'PLAYER 2';
-        const winColor = p2Dead || (!p1Dead && this.player1.hp > this.player2.hp) ? this.p1Color.color : this.p2Color.color;
-
         koSubtext.textContent = `${winner} WINS THE ROUND!`;
         koSubtext.style.color = winColor;
+
+        goldDisplay.textContent = `+${base} 🪙`;
+        goldDisplay.classList.remove('hidden');
+
+        adDoubleBtn.classList.remove('hidden');
+        setTimeout(() => adDoubleBtn.classList.add('hidden'), 8000);
 
         if (!p1Dead && this.player1.hp === this.player1.maxHp) {
             koSpecial.textContent = 'PERFECT!';

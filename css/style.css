@@ -162,6 +162,45 @@ body {
     background-size: 40px 40px;
 }
 
+/* Mobile button styles */
+.mobile-btn {
+    touch-action: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+.mobile-btn:active {
+    filter: brightness(1.4);
+    transform: scale(0.92);
+}
+
+/* Shop item styles */
+.shop-item {
+    background: #1f2937;
+    border: 2px solid #4b5563;
+    border-radius: 8px;
+    padding: 12px;
+    text-align: center;
+    transition: all 0.2s ease;
+}
+.shop-item:hover {
+    border-color: #a855f7;
+}
+.shop-item.owned {
+    border-color: #22c55e;
+    background: #064e3b;
+}
+.shop-item.locked {
+    opacity: 0.7;
+}
+.shop-item .price-tag {
+    color: #FFD60A;
+    font-family: 'Orbitron', sans-serif;
+}
+.shop-item .price-tag.not-enough {
+    color: #ef4444;
+    animation: shake 0.3s ease-in-out;
+}
+
 /* Responsive canvas scaling */
 @media (max-width: 1280px) {
     #gameCanvas {
