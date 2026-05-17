@@ -1,32 +1,81 @@
 export class HUD {
     constructor() {
         this.hitNumbers = [];
+        this.damageFlash = { p1: 0, p2: 0 };
+        this.hpDisplay = { p1: 100, p2: 100 };
+    }
+    
+    update() {
+        // Smooth damage flash decay
+        if (this.damageFlash.p1 > 0) this.damageFlash.p1 -= 0.05;
+        if (this.damageFlash.p2 > 0) this.damageFlash.p2 -= 0.05;
+        
+        // Smooth HP display transitions
+        if (this.hpDisplay.p1 !== undefined) {
+            const diff = this.hpDisplay.p1 - this._targetHp1;
+            if (Math.abs(diff) > 0.5) {
+                this.hpDisplay.p1 -= diff * 0.15;
+            } else {
+                this.hpDisplay.p1 = this._targetHp1;
+            }
+        }
+        if (this.hpDisplay.p2 !== undefined) {
+            const diff = this.hpDisplay.p2 - this._targetHp2;
+            if (Math.abs(diff) > 0.5) {
+                this.hpDisplay.p2 -= diff * 0.15;
+            } else {
+                this.hpDisplay.p2 = this._targetHp2;
+            }
+        }
     }
     
     drawHealthBars(ctx, p1, p2) {
-        const barWidth = 400;
-        const barHeight = 30;
-        const barY = 30;
-        const padding = 40;
+        if (!p1 || !p2) return;
         
-        this.drawSingleHealthBar(ctx, p1, padding, barY, barWidth, barHeight, 1);
-        this.drawSingleHealthBar(ctx, p2, ctx.canvas.width - padding - barWidth, barY, barWidth, barHeight, -1);
+        this._targetHp1 = p1.hp;
+        this._targetHp2 = p2.hp;
+        
+        const barWidth = 420;
+        const barHeight = 36;
+        const barY = 35;
+        const padding = 50;
+        
+        this.drawSingleHealthBar(ctx, p1, padding, barY, barWidth, barHeight, 1, this.damageFlash.p1);
+        this.drawSingleHealthBar(ctx, p2, ctx.canvas.width - padding - barWidth, barY, barWidth, barHeight, -1, this.damageFlash.p2);
     }
     
-    drawSingleHealthBar(ctx, player, x, y, width, height, dir) {
+    triggerDamageFlash(playerNum) {
+        if (playerNum === 1) this.damageFlash.p1 = 1.0;
+        else this.damageFlash.p2 = 1.0;
+    }
+    
+    drawSingleHealthBar(ctx, player, x, y, width, height, dir, flashAlpha) {
         const hpPercent = player.hp / player.maxHp;
+        const displayPercent = Math.max(0, this.hpDisplay[`p${player.playerNum}`] / player.maxHp);
         
         ctx.save();
         
-        ctx.fillStyle = '#1a1a2e';
-        ctx.strokeStyle = '#4a4a6a';
+        // Outer border with neon glow
+        ctx.shadowColor = player.glowColor;
+        ctx.shadowBlur = 12;
+        ctx.strokeStyle = player.color;
         ctx.lineWidth = 2;
+        ctx.fillStyle = '#0a0a15';
         ctx.fillRect(x, y, width, height);
         ctx.strokeRect(x, y, width, height);
+        ctx.shadowBlur = 0;
         
+        // Damage trail (white bar showing previous HP)
+        if (displayPercent > hpPercent) {
+            ctx.fillStyle = 'rgba(255,255,255,0.3)';
+            const trailX = dir === 1 ? x + width * hpPercent : x + width * displayPercent;
+            ctx.fillRect(trailX, y + 3, width * (displayPercent - hpPercent), height - 6);
+        }
+        
+        // Main HP bar with gradient
         let barColor;
         if (hpPercent > 0.6) {
-            barColor = `rgb(${Math.round((1 - hpPercent) * 2 * 34 + 34)}, 255, 34)`;
+            barColor = `rgb(${Math.round((1 - hpPercent) * 2 * 34 + 34)}, 255, 65)`;
         } else if (hpPercent > 0.3) {
             barColor = `rgb(255, ${Math.round(hpPercent * 3 * 200)}, 34)`;
         } else {
@@ -44,80 +93,114 @@ export class HUD {
         
         ctx.fillStyle = gradient;
         const fillX = dir === 1 ? x : x + width * (1 - hpPercent);
-        ctx.fillRect(fillX, y + 2, width * hpPercent, height - 4);
+        ctx.fillRect(fillX, y + 3, width * hpPercent, height - 6);
+        
+        // Damage flash overlay
+        if (flashAlpha > 0) {
+            ctx.fillStyle = `rgba(255, 50, 50, ${flashAlpha * 0.5})`;
+            ctx.fillRect(x, y, width, height);
+        }
+        
+        // Scanline effect
+        ctx.fillStyle = 'rgba(255,255,255,0.05)';
+        for (let sy = y; sy < y + height; sy += 4) {
+            ctx.fillRect(x, sy, width, 1);
+        }
         
         ctx.restore();
         
-        ctx.save();
-        ctx.font = 'bold 16px Orbitron';
-        ctx.fillStyle = player.color;
-        ctx.shadowColor = player.glowColor;
-        ctx.shadowBlur = 10;
-        ctx.textAlign = dir === 1 ? 'left' : 'right';
-        ctx.fillText(`P${player.playerNum} - ${player.weapon.name}`, dir === 1 ? x : x + width, y - 8);
-        ctx.restore();
-        
+        // Player name and weapon
         ctx.save();
         ctx.font = 'bold 14px Orbitron';
+        ctx.fillStyle = player.color;
+        ctx.shadowColor = player.glowColor;
+        ctx.shadowBlur = 8;
+        ctx.textAlign = dir === 1 ? 'left' : 'right';
+        ctx.fillText(`P${player.playerNum}`, dir === 1 ? x : x + width, y - 10);
+        
+        ctx.font = '11px Orbitron';
+        ctx.fillStyle = '#AAAAAA';
+        ctx.shadowBlur = 0;
+        ctx.fillText(player.weapon.name, dir === 1 ? x + 40 : x + width - 40, y - 10);
+        ctx.restore();
+        
+        // HP number
+        ctx.save();
+        ctx.font = 'bold 16px Orbitron';
         ctx.fillStyle = '#FFFFFF';
         ctx.textAlign = 'center';
-        ctx.fillText(`${player.hp}`, x + width / 2, y + 20);
+        ctx.shadowColor = '#FFFFFF';
+        ctx.shadowBlur = 4;
+        ctx.fillText(`${Math.ceil(player.hp)}`, x + width / 2, y + 22);
         ctx.restore();
     }
     
     drawSpecialMeters(ctx, p1, p2) {
         const meterWidth = 200;
-        const meterHeight = 12;
-        const meterY = 75;
-        const padding = 40;
+        const meterHeight = 14;
+        const meterY = 82;
+        const padding = 50;
         
         this.drawSingleSpecialMeter(ctx, p1, padding, meterY, meterWidth, meterHeight, 1);
         this.drawSingleSpecialMeter(ctx, p2, ctx.canvas.width - padding - meterWidth, meterY, meterWidth, meterHeight, -1);
     }
     
     drawSingleSpecialMeter(ctx, player, x, y, width, height, dir) {
-        const meterPercent = player.specialMeter / 100;
+        const meterPercent = Math.min(1, player.specialMeter / 100);
         
         ctx.save();
+        
+        // Background
         ctx.fillStyle = '#0a0a15';
         ctx.strokeStyle = '#3a3a5a';
         ctx.lineWidth = 1;
         ctx.fillRect(x, y, width, height);
         ctx.strokeRect(x, y, width, height);
         
+        // Fill
         if (meterPercent >= 1) {
             const pulse = Math.sin(Date.now() * 0.01) * 0.3 + 0.7;
             ctx.fillStyle = `rgba(255, 215, 0, ${pulse})`;
             ctx.shadowColor = '#FFD700';
             ctx.shadowBlur = 15;
         } else {
-            ctx.fillStyle = '#6366f1';
+            const gradient = ctx.createLinearGradient(x, y, x + width, y);
+            gradient.addColorStop(0, '#6366f1');
+            gradient.addColorStop(1, '#8b5cf6');
+            ctx.fillStyle = gradient;
             ctx.shadowBlur = 0;
         }
         
         const fillX = dir === 1 ? x : x + width * (1 - meterPercent);
-        ctx.fillRect(fillX, y + 1, width * meterPercent, height - 2);
+        ctx.fillRect(fillX, y + 2, width * meterPercent, height - 4);
+        
+        // Label
+        ctx.font = '9px Orbitron';
+        ctx.fillStyle = meterPercent >= 1 ? '#FFD700' : '#888888';
+        ctx.textAlign = 'center';
+        ctx.shadowBlur = 0;
+        ctx.fillText(meterPercent >= 1 ? 'SPECIAL READY' : 'SPECIAL', x + width / 2, y + 10);
         
         ctx.restore();
     }
     
     drawTimer(ctx, seconds, maxSeconds = 60) {
         const x = ctx.canvas.width / 2;
-        const y = 50;
+        const y = 55;
         
         ctx.save();
-        ctx.font = 'bold 36px "Press Start 2P"';
+        ctx.font = 'bold 32px Orbitron';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         
         if (seconds <= 10 && seconds > 0) {
-            const flash = Math.sin(Date.now() * 0.01) > 0;
+            const flash = Math.sin(Date.now() * 0.015) > 0;
             ctx.fillStyle = flash ? '#FF0000' : '#FF6666';
             ctx.shadowColor = '#FF0000';
             ctx.shadowBlur = 20;
         } else {
             ctx.fillStyle = '#FFFFFF';
-            ctx.shadowColor = '#FFFFFF';
+            ctx.shadowColor = '#6366f1';
             ctx.shadowBlur = 10;
         }
         
@@ -146,7 +229,7 @@ export class HUD {
         ctx.translate(x, y);
         ctx.scale(scale, scale);
         
-        ctx.font = 'bold 24px "Press Start 2P"';
+        ctx.font = 'bold 20px Orbitron';
         ctx.fillStyle = color;
         ctx.shadowColor = color;
         ctx.shadowBlur = 15;
@@ -190,7 +273,7 @@ export class HUD {
             
             ctx.save();
             ctx.globalAlpha = alpha;
-            ctx.font = `bold ${hn.size}px "Press Start 2P"`;
+            ctx.font = `bold ${hn.size}px Orbitron`;
             ctx.fillStyle = hn.color;
             ctx.shadowColor = hn.color;
             ctx.shadowBlur = 10;
@@ -227,7 +310,7 @@ export class HUD {
             ctx.save();
             
             ctx.beginPath();
-            ctx.arc(240 + i * dotSpacing, 95, dotSize / 2, 0, Math.PI * 2);
+            ctx.arc(260 + i * dotSpacing, 102, dotSize / 2, 0, Math.PI * 2);
             ctx.fillStyle = i < p1Wins ? '#FF2D55' : '#333344';
             ctx.fill();
             ctx.strokeStyle = '#666688';
@@ -235,7 +318,7 @@ export class HUD {
             ctx.stroke();
             
             ctx.beginPath();
-            ctx.arc(ctx.canvas.width - 240 - i * dotSpacing, 95, dotSize / 2, 0, Math.PI * 2);
+            ctx.arc(ctx.canvas.width - 260 - i * dotSpacing, 102, dotSize / 2, 0, Math.PI * 2);
             ctx.fillStyle = i < p2Wins ? '#00B8FF' : '#333344';
             ctx.fill();
             ctx.strokeStyle = '#666688';
@@ -247,5 +330,7 @@ export class HUD {
     
     clear() {
         this.hitNumbers = [];
+        this.damageFlash = { p1: 0, p2: 0 };
+        this.hpDisplay = { p1: 100, p2: 100 };
     }
 }

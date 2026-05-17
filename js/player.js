@@ -14,6 +14,7 @@ import {
     calculateKnockback,
     platforms
 } from './physics.js';
+import { Economy, PERKS } from './economy.js';
 
 export const PlayerState = {
     IDLE: 'IDLE',
@@ -35,8 +36,6 @@ export class Player {
         this.y = y;
         this.vx = 0;
         this.vy = 0;
-        this.hp = 100;
-        this.maxHp = 100;
         this.onGround = false;
         this.facingDir = playerNum === 1 ? 1 : -1;
         this.state = PlayerState.IDLE;
@@ -44,9 +43,23 @@ export class Player {
         this.glowColor = glowColor;
         this.playerNum = playerNum;
 
-        this.speed = 5;
+        // Pillar 2: Apply roguelite perk modifiers to base stats
+        const speedLevel = Economy.getPerkLevel('movement_speed');
+        const hpLevel = Economy.getPerkLevel('max_hp');
+        const damageLevel = Economy.getPerkLevel('damage_boost');
+
+        this.baseSpeed = 5;
+        this.speed = this.baseSpeed * (1 + speedLevel * 0.10);
         this.jumpForce = -14;
         this.weight = 1.0;
+
+        this.baseMaxHp = 100;
+        this.maxHp = this.baseMaxHp + (hpLevel * 20);
+        this.hp = this.maxHp;
+
+        this.damageMultiplier = 1 + (damageLevel * 0.15);
+        this.lifestealPercent = Economy.getPerkLevel('lifesteal') * 0.05;
+        this.specialChargeMultiplier = 1 + (Economy.getPerkLevel('special_charge') * 0.25);
 
         this.weapon = new Fists();
         this.specialMeter = 0;
@@ -364,6 +377,11 @@ export class Player {
             damageMultiplier *= 2.0;
         }
 
+        // Pillar 2: Apply attacker's damage perk multiplier
+        if (attacker && attacker.damageMultiplier) {
+            damageMultiplier *= attacker.damageMultiplier;
+        }
+
         const finalDamage = Math.round(amount * damageMultiplier);
         this.hp = Math.max(0, this.hp - finalDamage);
 
@@ -380,7 +398,13 @@ export class Player {
             if (attacker) {
                 attacker.comboCount++;
                 attacker.comboTimer = 60;
-                attacker.specialMeter = Math.min(100, attacker.specialMeter + 10 + attacker.comboCount * 5);
+                attacker.specialMeter = Math.min(100, attacker.specialMeter + (10 + attacker.comboCount * 5) * (attacker.specialChargeMultiplier || 1));
+
+                // Pillar 2: Apply lifesteal — heal percentage of damage dealt
+                if (attacker.lifestealPercent > 0) {
+                    const healAmount = Math.round(finalDamage * attacker.lifestealPercent);
+                    attacker.hp = Math.min(attacker.maxHp, attacker.hp + healAmount);
+                }
             }
         } else {
             this.specialMeter = Math.min(100, this.specialMeter + 15);
@@ -407,7 +431,6 @@ export class Player {
         this.y = y;
         this.vx = 0;
         this.vy = 0;
-        this.hp = this.maxHp;
         this.onGround = false;
         this.state = PlayerState.IDLE;
         this.specialMeter = 0;
@@ -424,6 +447,18 @@ export class Player {
         this.weapon = new Fists();
         this.wounds = [];
         this.deathAlpha = 1.0;
+
+        // Pillar 2: Reapply perk modifiers on reset
+        const speedLevel = Economy.getPerkLevel('movement_speed');
+        const hpLevel = Economy.getPerkLevel('max_hp');
+        const damageLevel = Economy.getPerkLevel('damage_boost');
+
+        this.speed = this.baseSpeed * (1 + speedLevel * 0.10);
+        this.maxHp = this.baseMaxHp + (hpLevel * 20);
+        this.hp = this.maxHp;
+        this.damageMultiplier = 1 + (damageLevel * 0.15);
+        this.lifestealPercent = Economy.getPerkLevel('lifesteal') * 0.05;
+        this.specialChargeMultiplier = 1 + (Economy.getPerkLevel('special_charge') * 0.25);
     }
 
     draw(ctx) {

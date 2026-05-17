@@ -1,13 +1,22 @@
+/**
+ * Combat Arena — Main Game Loop
+ * Commercial architecture integrating all 5 pillars:
+ * 1. Input interception + virtual joystick
+ * 2. Roguelite progression + localStorage
+ * 3. CrazyGames SDK v2 ad lifecycle
+ * 4. Juice effects (hitstop, screen shake, particle trails)
+ * 5. Asset loading + audio optimization
+ */
 import { InputHandler } from './input.js';
 import { Player, PlayerState } from './player.js';
-import { ParticleSystem, addWound, drawBloodDecals, drawMuzzleFlash, drawWeaponTrails } from './effects.js';
+import { ParticleSystem, addWound, drawBloodDecals, drawMuzzleFlashOverlay, drawWeaponTrails, ScreenShake, HitstopManager } from './effects.js';
 import { HUD } from './ui.js';
 import { AIController } from './ai.js';
 import { Fists, Katana, BaseballBat, Pistol, Bullet, ShellCasing } from './weapons.js';
 import { FLOOR_Y, LEFT_WALL, RIGHT_WALL, CANVAS_WIDTH, CANVAS_HEIGHT, platforms, checkHitboxOverlap, calculateKnockback, resolvePlayerCollision } from './physics.js';
 import { StickMan } from './stickman.js';
-import { Economy, SHOP_ITEMS, showRewardedAd } from './economy.js';
-import { soundManager } from './sound.js';
+import { Economy, WEAPON_POOLS, SKINS, showRewardedAd, showInterstitialAd } from './economy.js';
+import { soundManager, AssetLoader } from './sound.js';
 
 const GameState = {
     MENU: 'MENU',
@@ -18,26 +27,27 @@ const GameState = {
     GAME_OVER: 'GAME_OVER',
     PAUSED: 'PAUSED',
     SETTINGS: 'SETTINGS',
-    SHOP: 'SHOP'
+    SHOP: 'SHOP',
+    SURVIVAL: 'SURVIVAL'
 };
 
 const COLORS = [
-    { name: 'Crimson', color: '#FF2D55', glow: '#FF2D55' },
-    { name: 'Cobalt', color: '#00B8FF', glow: '#00B8FF' },
-    { name: 'Venom', color: '#00FF41', glow: '#00FF41' },
-    { name: 'Blaze', color: '#FFD60A', glow: '#FFD60A' },
-    { name: 'Phantom', color: '#B537F2', glow: '#B537F2' },
-    { name: 'Inferno', color: '#FF6B35', glow: '#FF6B35' },
-    { name: 'Ghost', color: '#F0F0F0', glow: '#F0F0F0' },
-    { name: 'Slash', color: '#FF69B4', glow: '#FF69B4' }
+    { name: 'Crimson', color: '#FF2D55', glow: '#FF2D55', id: 'crimson' },
+    { name: 'Cobalt', color: '#00B8FF', glow: '#00B8FF', id: 'cobalt' },
+    { name: 'Venom', color: '#00FF41', glow: '#00FF41', id: 'venom' },
+    { name: 'Blaze', color: '#FFD60A', glow: '#FFD60A', id: 'blaze' },
+    { name: 'Phantom', color: '#B537F2', glow: '#B537F2', id: 'phantom' },
+    { name: 'Inferno', color: '#FF6B35', glow: '#FF6B35', id: 'inferno' },
+    { name: 'Ghost', color: '#F0F0F0', glow: '#F0F0F0', id: 'ghost' },
+    { name: 'Slash', color: '#FF69B4', glow: '#FF69B4', id: 'slash' }
 ];
 
 const WEAPONS = [
-    { name: 'Fists', class: Fists },
-    { name: 'Katana', class: Katana },
-    { name: 'Baseball Bat', class: BaseballBat },
-    { name: 'Pistol', class: Pistol },
-    { name: 'Random', class: null }
+    { name: 'Fists', class: Fists, id: 'fists' },
+    { name: 'Katana', class: Katana, id: 'katana' },
+    { name: 'Baseball Bat', class: BaseballBat, id: 'baseball_bat' },
+    { name: 'Pistol', class: Pistol, id: 'pistol' },
+    { name: 'Random', class: null, id: null }
 ];
 
 class Game {
@@ -47,8 +57,14 @@ class Game {
         this.canvas.width = CANVAS_WIDTH;
         this.canvas.height = CANVAS_HEIGHT;
 
+        // Pillar 1: Input system
         this.inputHandler = new InputHandler();
+
+        // Pillar 4: Effects systems
         this.particleSystem = new ParticleSystem();
+        this.screenShake = new ScreenShake();
+        this.hitstop = new HitstopManager();
+
         this.hud = new HUD();
         this.aiController = new AIController('hard');
 
@@ -73,7 +89,6 @@ class Game {
         this.maxTimer = 60;
         this.timerCounter = 0;
 
-        this.screenShake = { x: 0, y: 0, intensity: 0, duration: 0 };
         this.roundAnnouncementTimer = 0;
         this.koTimer = 0;
 
@@ -81,7 +96,6 @@ class Game {
         this.shellCasings = [];
         this.weaponTrails = [];
         this.floatingTexts = [];
-        this.hitStopFrames = 0;
 
         this.lastMatchReward = 0;
         this.survivalWave = 0;
@@ -101,9 +115,21 @@ class Game {
         window.bloodDecals = [];
         window.gameSettings = this.settings;
 
+        // Pillar 5: Asset loading
+        this.assetLoader = new AssetLoader();
+        this.gameReady = false;
+
         this.loadSettings();
         this.setupEventListeners();
         this.setupCharacterSelect();
+
+        // Pillar 5: Start async asset loading
+        this.assetLoader.startLoading();
+        this.assetLoader.loadAll(() => {
+            this.gameReady = true;
+            console.log('[Game] All assets loaded — ready to play');
+        });
+
         this.gameLoop();
     }
 
@@ -169,6 +195,7 @@ class Game {
         });
         document.getElementById('setting-screen-shake').addEventListener('change', (e) => {
             this.settings.screenShake = e.target.checked;
+            this.screenShake.enabled = this.settings.screenShake;
             this.saveSettings();
         });
         document.getElementById('setting-blood').addEventListener('change', (e) => {
@@ -176,6 +203,7 @@ class Game {
             this.saveSettings();
         });
         document.getElementById('setting-volume').addEventListener('input', (e) => {
+            soundManager.setVolume(parseInt(e.target.value));
             this.settings.volume = parseInt(e.target.value);
             this.saveSettings();
         });
@@ -185,30 +213,17 @@ class Game {
             this.saveSettings();
         });
 
-        window.addEventListener('keydown', (e) => {
-            if (e.code === 'Escape') {
-                if (this.state === GameState.FIGHTING) {
-                    this.pauseGame();
-                } else if (this.state === GameState.PAUSED) {
-                    this.resumeGame();
-                } else if (this.state === GameState.SHOP) {
-                    this.hideShop();
-                }
-            }
-            soundManager.init();
-        });
-
-        document.addEventListener('click', () => soundManager.init(), { once: true });
-
+        // Shop
         document.getElementById('btn-shop').addEventListener('click', () => this.showShop());
         document.getElementById('btn-shop-back').addEventListener('click', () => this.hideShop());
 
+        // Pillar 3: Rewarded ad hooks
         document.getElementById('btn-watch-ad-revive').addEventListener('click', () => {
             soundManager.muteForAd();
             showRewardedAd(() => {
                 soundManager.unmuteAfterAd();
                 if (this.player1 && this.player1.hp <= 0) {
-                    this.player1.hp = 30;
+                    this.player1.hp = Math.round(this.player1.maxHp * 0.5);
                     this.player1.state = PlayerState.IDLE;
                     this.player1.deathAlpha = 1.0;
                 }
@@ -221,7 +236,7 @@ class Game {
             if (Economy.spendGold(50)) {
                 soundManager.synthGoldPickup();
                 if (this.player1 && this.player1.hp <= 0) {
-                    this.player1.hp = 30;
+                    this.player1.hp = Math.round(this.player1.maxHp * 0.5);
                     this.player1.state = PlayerState.IDLE;
                     this.player1.deathAlpha = 1.0;
                 }
@@ -245,9 +260,16 @@ class Game {
             });
         });
 
-        document.getElementById('setting-volume').addEventListener('input', (e) => {
-            soundManager.setVolume(parseInt(e.target.value));
+        // Audio init on first interaction
+        window.addEventListener('keydown', () => {
+            soundManager.init();
+            if (this.inputHandler.isPausePressed()) {
+                if (this.state === GameState.FIGHTING) this.pauseGame();
+                else if (this.state === GameState.PAUSED) this.resumeGame();
+                else if (this.state === GameState.SHOP) this.hideShop();
+            }
         });
+        document.addEventListener('click', () => soundManager.init(), { once: true });
     }
 
     setupCharacterSelect() {
@@ -372,8 +394,10 @@ class Game {
         weaponsDiv.innerHTML = '';
         stagesDiv.innerHTML = '';
 
-        SHOP_ITEMS.weapons.forEach(item => {
-            const owned = Economy.isUnlocked(item.id);
+        // Render weapons from all rarity pools
+        const allWeapons = [...WEAPON_POOLS.COMMON, ...WEAPON_POOLS.RARE, ...WEAPON_POOLS.MYTHIC];
+        allWeapons.forEach(item => {
+            const owned = Economy.isWeaponUnlocked(item.id);
             const canAfford = Economy.getGold() >= item.price;
             const div = document.createElement('div');
             div.className = `shop-item ${owned ? 'owned' : 'locked'}`;
@@ -388,8 +412,13 @@ class Game {
             weaponsDiv.appendChild(div);
         });
 
-        SHOP_ITEMS.stages.forEach(item => {
-            const owned = Economy.isUnlocked(item.id);
+        // Render stages
+        const stages = [
+            { id: 'blood_dojo', name: 'Blood Dojo', price: 150, desc: 'Japanese dojo arena' },
+            { id: 'cyber_void', name: 'Cyber Void', price: 300, desc: 'Matrix-style void' }
+        ];
+        stages.forEach(item => {
+            const owned = Economy.isStageUnlocked(item.id);
             const canAfford = Economy.getGold() >= item.price;
             const div = document.createElement('div');
             div.className = `shop-item ${owned ? 'owned' : 'locked'}`;
@@ -405,17 +434,19 @@ class Game {
         });
 
         weaponsDiv.querySelectorAll('.shop-buy-btn').forEach(btn => {
-            btn.addEventListener('click', () => this.buyItem(btn.dataset.id, parseInt(btn.dataset.price)));
+            btn.addEventListener('click', () => this.buyItem(btn.dataset.id, parseInt(btn.dataset.price), 'weapon'));
         });
         stagesDiv.querySelectorAll('.shop-buy-btn').forEach(btn => {
-            btn.addEventListener('click', () => this.buyItem(btn.dataset.id, parseInt(btn.dataset.price)));
+            btn.addEventListener('click', () => this.buyItem(btn.dataset.id, parseInt(btn.dataset.price), 'stage'));
         });
     }
 
-    buyItem(itemId, price) {
-        if (Economy.isUnlocked(itemId)) return;
+    buyItem(itemId, price, type) {
+        if (type === 'weapon' && Economy.isWeaponUnlocked(itemId)) return;
+        if (type === 'stage' && Economy.isStageUnlocked(itemId)) return;
         if (Economy.spendGold(price)) {
-            Economy.unlock(itemId);
+            if (type === 'weapon') Economy.unlockWeapon(itemId);
+            else Economy.unlockStage(itemId);
             soundManager.synthGoldPickup();
             this.renderShop();
         } else {
@@ -427,7 +458,6 @@ class Game {
         const canvas = document.getElementById(canvasId);
         const ctx = canvas.getContext('2d');
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-
         const stickman = new StickMan(color.color, color.glow);
         stickman.drawPreview(ctx, canvas.width / 2, canvas.height / 2 + 20, anim, Date.now() * 0.001);
     }
@@ -484,6 +514,12 @@ class Game {
         window.bloodDecals = [];
 
         this.state = GameState.FIGHTING;
+
+        // Pillar 3: Notify SDK gameplay start
+        try {
+            if (window.CrazyGames?.SDK?.game) window.CrazyGames.SDK.game.gameplayStart();
+        } catch (e) {}
+
         this.startRoundAnnouncement();
     }
 
@@ -500,6 +536,7 @@ class Game {
         setTimeout(() => {
             fightText.textContent = 'FIGHT!';
             fightText.classList.add('slam-in');
+            soundManager.play('round_start');
         }, 1000);
 
         setTimeout(() => {
@@ -511,11 +548,18 @@ class Game {
     pauseGame() {
         this.state = GameState.PAUSED;
         document.getElementById('pause-overlay').classList.remove('hidden');
+        // Pillar 3: Notify SDK gameplay stop
+        try {
+            if (window.CrazyGames?.SDK?.game) window.CrazyGames.SDK.game.gameplayStop();
+        } catch (e) {}
     }
 
     resumeGame() {
         this.state = GameState.FIGHTING;
         document.getElementById('pause-overlay').classList.add('hidden');
+        try {
+            if (window.CrazyGames?.SDK?.game) window.CrazyGames.SDK.game.gameplayStart();
+        } catch (e) {}
     }
 
     restartGame() {
@@ -551,6 +595,9 @@ class Game {
         this.weaponTrails = [];
         this.floatingTexts = [];
         window.bloodDecals = [];
+        try {
+            if (window.CrazyGames?.SDK?.game) window.CrazyGames.SDK.game.gameplayStop();
+        } catch (e) {}
     }
 
     showSettings() {
@@ -564,31 +611,12 @@ class Game {
     }
 
     triggerScreenShake(intensity, duration) {
-        if (!this.settings.screenShake) return;
-        this.screenShake.intensity = intensity;
-        this.screenShake.duration = duration;
-    }
-
-    updateScreenShake() {
-        if (this.screenShake.duration > 0) {
-            this.screenShake.x = (Math.random() - 0.5) * this.screenShake.intensity;
-            this.screenShake.y = (Math.random() - 0.5) * this.screenShake.intensity;
-            this.screenShake.duration--;
-            this.screenShake.intensity *= 0.9;
-        } else {
-            this.screenShake.x = 0;
-            this.screenShake.y = 0;
-        }
+        this.screenShake.trigger(intensity, duration);
     }
 
     addFloatingText(x, y, value, color, size) {
         this.floatingTexts.push({
-            x, y,
-            value,
-            vy: -2,
-            life: 50,
-            maxLife: 50,
-            color,
+            x, y, value, vy: -2, life: 50, maxLife: 50, color,
             size: Math.min(size, 28)
         });
     }
@@ -598,7 +626,6 @@ class Game {
             const ft = this.floatingTexts[i];
             ft.y += ft.vy;
             ft.life--;
-
             const alpha = ft.life / ft.maxLife;
             const shake = ft.size >= 28 ? (Math.random() - 0.5) * 2 : 0;
 
@@ -612,9 +639,7 @@ class Game {
             ctx.fillText(ft.value, ft.x + shake, ft.y);
             ctx.restore();
 
-            if (ft.life <= 0) {
-                this.floatingTexts.splice(i, 1);
-            }
+            if (ft.life <= 0) this.floatingTexts.splice(i, 1);
         }
     }
 
@@ -631,16 +656,16 @@ class Game {
                 continue;
             }
 
+            // Check bullet vs player1
             if (this.player1 && bullet.alive) {
                 if (bullet.x > this.player1.x - 15 && bullet.x < this.player1.x + 15 &&
                     bullet.y > this.player1.y - 80 && bullet.y < this.player1.y) {
-                    const knockback = calculateKnockback(
-                        { knockback: 4 }, bullet.damage, bullet.facingDir, this.player1.weight
-                    );
+                    const knockback = calculateKnockback({ knockback: 4 }, bullet.damage, bullet.facingDir, this.player1.weight);
                     const result = this.player1.takeDamage(bullet.damage, knockback.vx, knockback.vy, this.player2);
                     bullet.alive = false;
 
                     this.hud.addHitNumber(this.player1.x, this.player1.y - 90, result.damage, result.isCritical ? 'critical' : 'normal');
+                    this.hud.triggerDamageFlash(1);
                     this.addFloatingText(this.player1.x, this.player1.y - 90, result.damage.toString(), result.damage > 30 ? '#ff4400' : '#ffffff', 14 + Math.floor(result.damage / 5));
 
                     if (this.settings.blood) {
@@ -648,20 +673,22 @@ class Game {
                         addWound(this.player1, bullet.facingDir, result.damage);
                     }
                     this.particleSystem.hitSpark(this.player1.x, this.player1.y - 50, this.player2.glowColor);
+                    this.particleSystem.sparkImpact(this.player1.x, this.player1.y - 50, 10);
                     this.triggerScreenShake(result.damage > 20 ? 6 : 3, 10);
+                    this.hitstop.trigger(result.damage);
                 }
             }
 
+            // Check bullet vs player2
             if (this.player2 && bullet.alive) {
                 if (bullet.x > this.player2.x - 15 && bullet.x < this.player2.x + 15 &&
                     bullet.y > this.player2.y - 80 && bullet.y < this.player2.y) {
-                    const knockback = calculateKnockback(
-                        { knockback: 4 }, bullet.damage, bullet.facingDir, this.player2.weight
-                    );
+                    const knockback = calculateKnockback({ knockback: 4 }, bullet.damage, bullet.facingDir, this.player2.weight);
                     const result = this.player2.takeDamage(bullet.damage, knockback.vx, knockback.vy, this.player1);
                     bullet.alive = false;
 
                     this.hud.addHitNumber(this.player2.x, this.player2.y - 90, result.damage, result.isCritical ? 'critical' : 'normal');
+                    this.hud.triggerDamageFlash(2);
                     this.addFloatingText(this.player2.x, this.player2.y - 90, result.damage.toString(), result.damage > 30 ? '#ff4400' : '#ffffff', 14 + Math.floor(result.damage / 5));
 
                     if (this.settings.blood) {
@@ -669,7 +696,9 @@ class Game {
                         addWound(this.player2, bullet.facingDir, result.damage);
                     }
                     this.particleSystem.hitSpark(this.player2.x, this.player2.y - 50, this.player1.glowColor);
+                    this.particleSystem.sparkImpact(this.player2.x, this.player2.y - 50, 10);
                     this.triggerScreenShake(result.damage > 20 ? 6 : 3, 10);
+                    this.hitstop.trigger(result.damage);
                 }
             }
         }
@@ -678,9 +707,7 @@ class Game {
     updateShellCasings() {
         for (let i = this.shellCasings.length - 1; i >= 0; i--) {
             this.shellCasings[i].update();
-            if (this.shellCasings[i].life <= 0) {
-                this.shellCasings.splice(i, 1);
-            }
+            if (this.shellCasings[i].life <= 0) this.shellCasings.splice(i, 1);
         }
     }
 
@@ -711,54 +738,34 @@ class Game {
     startWeaponTrail(player) {
         if (player.weapon.name === 'Katana') {
             this.weaponTrails.push({
-                points: [],
-                recording: true,
-                player,
-                reach: 95,
-                color: 'rgba(180,230,255,0.9)',
-                glowColor: '#aaddff',
-                maxWidth: 5,
-                maxPoints: 12
+                points: [], recording: true, player, reach: 95,
+                color: 'rgba(180,230,255,0.9)', glowColor: '#aaddff',
+                maxWidth: 5, maxPoints: 12
             });
         } else if (player.weapon.name === 'Baseball Bat') {
             this.weaponTrails.push({
-                points: [],
-                recording: true,
-                player,
-                reach: 95,
-                color: 'rgba(180,120,60,0.6)',
-                glowColor: '#b4783c',
-                maxWidth: 8,
-                maxPoints: 8
+                points: [], recording: true, player, reach: 95,
+                color: 'rgba(180,120,60,0.6)', glowColor: '#b4783c',
+                maxWidth: 8, maxPoints: 8
             });
         }
     }
 
     checkCollisions() {
         if (!this.player1 || !this.player2) return;
-
         resolvePlayerCollision(this.player1, this.player2);
 
+        // Player 1 attacks Player 2
         if (this.player1.currentHitbox && !this.player1.hasHitThisAttack) {
             if (checkHitboxOverlap(this.player1.currentHitbox, this.player2.hitbox)) {
                 const isHeavy = this.player1.state === PlayerState.ATTACK_HEAVY;
                 const damage = isHeavy ? this.player1.weapon.getHeavyAttackDamage() : this.player1.weapon.getLightAttackDamage();
-                const knockback = calculateKnockback(
-                    this.player1.weapon,
-                    damage,
-                    this.player1.facingDir,
-                    this.player2.weight
-                );
-
-                const result = this.player2.takeDamage(
-                    damage,
-                    knockback.vx,
-                    knockback.vy,
-                    this.player1
-                );
+                const knockback = calculateKnockback(this.player1.weapon, damage, this.player1.facingDir, this.player2.weight);
+                const result = this.player2.takeDamage(damage, knockback.vx, knockback.vy, this.player1);
 
                 this.player1.hasHitThisAttack = true;
                 this.hud.addHitNumber(this.player2.x, this.player2.y - 90, result.damage, result.isCritical ? 'critical' : result.isCounter ? 'counter' : 'normal');
+                this.hud.triggerDamageFlash(2);
                 this.addFloatingText(this.player2.x, this.player2.y - 90, result.damage.toString(), result.damage > 30 ? '#ff4400' : result.damage > 15 ? '#ffaa00' : '#ffffff', 14 + Math.floor(result.damage / 5));
 
                 if (this.settings.blood) {
@@ -766,36 +773,30 @@ class Game {
                     addWound(this.player2, this.player1.facingDir, result.damage);
                 }
                 this.particleSystem.hitSpark(this.player2.x, this.player2.y - 50, this.player1.glowColor);
+                this.particleSystem.sparkImpact(this.player2.x, this.player2.y - 50, Math.min(15, 8 + Math.floor(result.damage / 5)));
 
-                if (isHeavy) {
-                    this.hitStopFrames = 3;
-                    this.triggerScreenShake(result.damage > 30 ? 8 : 5, 15);
-                } else if (result.damage > 15) {
-                    this.triggerScreenShake(4, 10);
-                }
+                // Pillar 4: Hitstop + screen shake
+                this.hitstop.trigger(result.damage);
+                this.triggerScreenShake(result.damage > 30 ? 8 : result.damage > 15 ? 5 : 3, result.damage > 30 ? 15 : 10);
+
+                // Sound
+                if (this.player1.weapon.name === 'Katana') soundManager.play('sword_slash');
+                else if (this.player1.weapon.name === 'Baseball Bat') soundManager.play('bat_swing');
+                else soundManager.synthPunchWhoosh();
             }
         }
 
+        // Player 2 attacks Player 1
         if (this.player2.currentHitbox && !this.player2.hasHitThisAttack) {
             if (checkHitboxOverlap(this.player2.currentHitbox, this.player1.hitbox)) {
                 const isHeavy = this.player2.state === PlayerState.ATTACK_HEAVY;
                 const damage = isHeavy ? this.player2.weapon.getHeavyAttackDamage() : this.player2.weapon.getLightAttackDamage();
-                const knockback = calculateKnockback(
-                    this.player2.weapon,
-                    damage,
-                    this.player2.facingDir,
-                    this.player1.weight
-                );
-
-                const result = this.player1.takeDamage(
-                    damage,
-                    knockback.vx,
-                    knockback.vy,
-                    this.player2
-                );
+                const knockback = calculateKnockback(this.player2.weapon, damage, this.player2.facingDir, this.player1.weight);
+                const result = this.player1.takeDamage(damage, knockback.vx, knockback.vy, this.player2);
 
                 this.player2.hasHitThisAttack = true;
                 this.hud.addHitNumber(this.player1.x, this.player1.y - 90, result.damage, result.isCritical ? 'critical' : result.isCounter ? 'counter' : 'normal');
+                this.hud.triggerDamageFlash(1);
                 this.addFloatingText(this.player1.x, this.player1.y - 90, result.damage.toString(), result.damage > 30 ? '#ff4400' : result.damage > 15 ? '#ffaa00' : '#ffffff', 14 + Math.floor(result.damage / 5));
 
                 if (this.settings.blood) {
@@ -803,13 +804,14 @@ class Game {
                     addWound(this.player1, this.player2.facingDir, result.damage);
                 }
                 this.particleSystem.hitSpark(this.player1.x, this.player1.y - 50, this.player2.glowColor);
+                this.particleSystem.sparkImpact(this.player1.x, this.player1.y - 50, Math.min(15, 8 + Math.floor(result.damage / 5)));
 
-                if (isHeavy) {
-                    this.hitStopFrames = 3;
-                    this.triggerScreenShake(result.damage > 30 ? 8 : 5, 15);
-                } else if (result.damage > 15) {
-                    this.triggerScreenShake(4, 10);
-                }
+                this.hitstop.trigger(result.damage);
+                this.triggerScreenShake(result.damage > 30 ? 8 : result.damage > 15 ? 5 : 3, result.damage > 30 ? 15 : 10);
+
+                if (this.player2.weapon.name === 'Katana') soundManager.play('sword_slash');
+                else if (this.player2.weapon.name === 'Baseball Bat') soundManager.play('bat_swing');
+                else soundManager.synthPunchWhoosh();
             }
         }
     }
@@ -820,16 +822,10 @@ class Game {
             this.player1.vy = -8;
             this.particleSystem.deathExplosion(this.player1.x, this.player1.y - 40, this.player1.glowColor);
             this.triggerScreenShake(12, 20);
-
+            soundManager.play('death');
             if (this.settings.blood) {
                 for (let i = 0; i < 5; i++) {
-                    window.bloodDecals.push({
-                        x: this.player1.x + (Math.random() - 0.5) * 40,
-                        y: FLOOR_Y,
-                        radius: 4 + Math.random() * 8,
-                        alpha: 0.7,
-                        age: 0
-                    });
+                    window.bloodDecals.push({ x: this.player1.x + (Math.random() - 0.5) * 40, y: FLOOR_Y, radius: 4 + Math.random() * 8, alpha: 0.7, age: 0 });
                 }
             }
         }
@@ -839,25 +835,16 @@ class Game {
             this.player2.vy = -8;
             this.particleSystem.deathExplosion(this.player2.x, this.player2.y - 40, this.player2.glowColor);
             this.triggerScreenShake(12, 20);
-
+            soundManager.play('death');
             if (this.settings.blood) {
                 for (let i = 0; i < 5; i++) {
-                    window.bloodDecals.push({
-                        x: this.player2.x + (Math.random() - 0.5) * 40,
-                        y: FLOOR_Y,
-                        radius: 4 + Math.random() * 8,
-                        alpha: 0.7,
-                        age: 0
-                    });
+                    window.bloodDecals.push({ x: this.player2.x + (Math.random() - 0.5) * 40, y: FLOOR_Y, radius: 4 + Math.random() * 8, alpha: 0.7, age: 0 });
                 }
             }
         }
 
-        if ((this.player1.hp <= 0 && this.player1.y >= FLOOR_Y) ||
-            (this.player2.hp <= 0 && this.player2.y >= FLOOR_Y)) {
-            if (this.state === GameState.FIGHTING) {
-                this.endRound();
-            }
+        if ((this.player1.hp <= 0 && this.player1.y >= FLOOR_Y) || (this.player2.hp <= 0 && this.player2.y >= FLOOR_Y)) {
+            if (this.state === GameState.FIGHTING) this.endRound();
         }
     }
 
@@ -868,22 +855,18 @@ class Game {
         const p1Dead = this.player1.hp <= 0;
         const p2Dead = this.player2.hp <= 0;
 
-        if (p1Dead && p2Dead) {
-        } else if (p1Dead) {
-            this.p2Wins++;
-        } else if (p2Dead) {
-            this.p1Wins++;
-        } else {
-            if (this.player1.hp > this.player2.hp) {
-                this.p1Wins++;
-            } else if (this.player2.hp > this.player1.hp) {
-                this.p2Wins++;
-            }
+        if (p1Dead && p2Dead) {}
+        else if (p1Dead) this.p2Wins++;
+        else if (p2Dead) this.p1Wins++;
+        else {
+            if (this.player1.hp > this.player2.hp) this.p1Wins++;
+            else if (this.player2.hp > this.player1.hp) this.p2Wins++;
         }
 
         const winner = p2Dead || (!p1Dead && this.player1.hp > this.player2.hp) ? 'PLAYER 1' : 'PLAYER 2';
         const winColor = p2Dead || (!p1Dead && this.player1.hp > this.player2.hp) ? this.p1Color.color : this.p2Color.color;
 
+        // Pillar 2: Calculate and award gold
         let base = 15;
         if (winner === 'PLAYER 1') base += 25;
         base += Math.floor(this.player1.comboCount / 3) * 5;
@@ -892,6 +875,7 @@ class Game {
 
         this.lastMatchReward = base;
         Economy.addGold(base);
+        Economy.incrementMatches();
         soundManager.synthGoldPickup();
 
         const koScreen = document.getElementById('ko-screen');
@@ -903,13 +887,10 @@ class Game {
 
         koScreen.classList.remove('hidden');
         koText.classList.add('slam-in');
-
         koSubtext.textContent = `${winner} WINS THE ROUND!`;
         koSubtext.style.color = winColor;
-
         goldDisplay.textContent = `+${base} 🪙`;
         goldDisplay.classList.remove('hidden');
-
         adDoubleBtn.classList.remove('hidden');
         setTimeout(() => adDoubleBtn.classList.add('hidden'), 8000);
 
@@ -923,14 +904,16 @@ class Game {
             koSpecial.classList.add('hidden');
         }
 
-        setTimeout(() => {
-            koText.classList.remove('slam-in');
-        }, 500);
+        setTimeout(() => koText.classList.remove('slam-in'), 500);
+
+        // Pillar 3: Show interstitial ad between rounds (every 3 rounds)
+        if (this.round % 3 === 0) {
+            setTimeout(() => showInterstitialAd(), 1500);
+        }
     }
 
     nextRound() {
         const winsNeeded = Math.ceil(this.maxRounds / 2);
-
         if (this.p1Wins >= winsNeeded || this.p2Wins >= winsNeeded) {
             this.endGame();
             return;
@@ -954,6 +937,9 @@ class Game {
 
     endGame() {
         this.state = GameState.GAME_OVER;
+        try {
+            if (window.CrazyGames?.SDK?.game) window.CrazyGames.SDK.game.gameplayStop();
+        } catch (e) {}
 
         const koScreen = document.getElementById('ko-screen');
         const koText = document.getElementById('ko-text');
@@ -974,13 +960,14 @@ class Game {
     }
 
     update() {
-        if (this.hitStopFrames > 0) {
-            this.hitStopFrames--;
+        // Pillar 4: Hitstop — freeze updates, only draw
+        if (this.hitstop.update()) {
             this.draw();
             return;
         }
 
         this.inputHandler.update();
+        this.hud.update();
 
         if (this.state === GameState.FIGHTING) {
             if (this.roundAnnouncementTimer > 0) {
@@ -1001,14 +988,34 @@ class Game {
             this.player1.update(p1Input, this.player2);
             this.player2.update(p2Input, this.player1);
 
+            // Ground impact particles when landing
+            if (this.player1.y >= FLOOR_Y && this.player1.vy === 0 && this.player1.wasAirborne) {
+                this.particleSystem.groundImpact(this.player1.x, FLOOR_Y);
+                this.player1.wasAirborne = false;
+            } else if (this.player1.y < FLOOR_Y) {
+                this.player1.wasAirborne = true;
+            }
+            if (this.player2.y >= FLOOR_Y && this.player2.vy === 0 && this.player2.wasAirborne) {
+                this.particleSystem.groundImpact(this.player2.x, FLOOR_Y);
+                this.player2.wasAirborne = false;
+            } else if (this.player2.y < FLOOR_Y) {
+                this.player2.wasAirborne = true;
+            }
+
+            // Handle P1 attacks
             if (this.inputHandler.isActionDown(1, 'lightAttack')) {
                 const result = this.player1.attack('light');
                 if (result !== null && this.player1.weapon.name === 'Pistol' && this.player1.weapon.hasAmmo()) {
                     const newBullets = this.player1.weapon.fire(this.player1.x, this.player1.y, this.player1.facingDir);
                     if (newBullets) {
                         this.bullets.push(...newBullets);
+                        for (const bullet of newBullets) {
+                            this.particleSystem.bulletTrail(bullet.x, bullet.y, bullet.vx * 0.5, 0, '#FFFF88');
+                        }
                         this.shellCasings.push(new ShellCasing(this.player1.x + this.player1.facingDir * 20, this.player1.y - 50, this.player1.facingDir));
+                        this.particleSystem.muzzleFlash(this.player1.x + this.player1.facingDir * 30, this.player1.y - 50, this.player1.facingDir);
                     }
+                    soundManager.play('pistol');
                     this.startWeaponTrail(this.player1);
                 } else if (result !== null) {
                     this.startWeaponTrail(this.player1);
@@ -1019,8 +1026,13 @@ class Game {
                     const newBullets = this.player1.weapon.fire(this.player1.x, this.player1.y, this.player1.facingDir);
                     if (newBullets) {
                         this.bullets.push(...newBullets);
+                        for (const bullet of newBullets) {
+                            this.particleSystem.bulletTrail(bullet.x, bullet.y, bullet.vx * 0.5, 0, '#FFFF88');
+                        }
                         this.shellCasings.push(new ShellCasing(this.player1.x + this.player1.facingDir * 20, this.player1.y - 50, this.player1.facingDir));
+                        this.particleSystem.muzzleFlash(this.player1.x + this.player1.facingDir * 30, this.player1.y - 50, this.player1.facingDir);
                     }
+                    soundManager.play('pistol');
                     this.startWeaponTrail(this.player1);
                 } else if (result !== null) {
                     this.startWeaponTrail(this.player1);
@@ -1029,14 +1041,20 @@ class Game {
                 this.player1.attack('special');
             }
 
+            // Handle P2 attacks
             if (p2Input.lightAttack) {
                 const result = this.player2.attack('light');
                 if (result !== null && this.player2.weapon.name === 'Pistol' && this.player2.weapon.hasAmmo()) {
                     const newBullets = this.player2.weapon.fire(this.player2.x, this.player2.y, this.player2.facingDir);
                     if (newBullets) {
                         this.bullets.push(...newBullets);
+                        for (const bullet of newBullets) {
+                            this.particleSystem.bulletTrail(bullet.x, bullet.y, bullet.vx * 0.5, 0, '#FFFF88');
+                        }
                         this.shellCasings.push(new ShellCasing(this.player2.x + this.player2.facingDir * 20, this.player2.y - 50, this.player2.facingDir));
+                        this.particleSystem.muzzleFlash(this.player2.x + this.player2.facingDir * 30, this.player2.y - 50, this.player2.facingDir);
                     }
+                    soundManager.play('pistol');
                     this.startWeaponTrail(this.player2);
                 } else if (result !== null) {
                     this.startWeaponTrail(this.player2);
@@ -1047,8 +1065,13 @@ class Game {
                     const newBullets = this.player2.weapon.fire(this.player2.x, this.player2.y, this.player2.facingDir);
                     if (newBullets) {
                         this.bullets.push(...newBullets);
+                        for (const bullet of newBullets) {
+                            this.particleSystem.bulletTrail(bullet.x, bullet.y, bullet.vx * 0.5, 0, '#FFFF88');
+                        }
                         this.shellCasings.push(new ShellCasing(this.player2.x + this.player2.facingDir * 20, this.player2.y - 50, this.player2.facingDir));
+                        this.particleSystem.muzzleFlash(this.player2.x + this.player2.facingDir * 30, this.player2.y - 50, this.player2.facingDir);
                     }
+                    soundManager.play('pistol');
                     this.startWeaponTrail(this.player2);
                 } else if (result !== null) {
                     this.startWeaponTrail(this.player2);
@@ -1086,20 +1109,22 @@ class Game {
         }
 
         this.particleSystem.update();
-        this.updateScreenShake();
+        this.screenShake.update();
     }
 
     draw() {
         this.ctx.save();
-        this.ctx.translate(this.screenShake.x, this.screenShake.y);
+
+        // Pillar 4: Apply screen shake transform
+        this.screenShake.apply(this.ctx);
 
         this.ctx.clearRect(-10, -10, CANVAS_WIDTH + 20, CANVAS_HEIGHT + 20);
-
         this.drawBackground();
 
         if (this.state === GameState.FIGHTING || this.state === GameState.ROUND_END || this.state === GameState.PAUSED) {
             drawBloodDecals(this.ctx);
 
+            // Platforms
             for (const platform of platforms) {
                 this.ctx.save();
                 this.ctx.fillStyle = '#2a2a4a';
@@ -1112,6 +1137,7 @@ class Game {
                 this.ctx.restore();
             }
 
+            // Floor
             this.ctx.save();
             this.ctx.fillStyle = '#1a1a3a';
             this.ctx.strokeStyle = '#8b5cf6';
@@ -1122,28 +1148,31 @@ class Game {
             this.ctx.strokeRect(LEFT_WALL, FLOOR_Y, RIGHT_WALL - LEFT_WALL, 5);
             this.ctx.restore();
 
-            for (const casing of this.shellCasings) {
-                casing.draw(this.ctx);
-            }
+            // Shell casings
+            for (const casing of this.shellCasings) casing.draw(this.ctx);
 
+            // Pillar 4: Weapon trails with screen blending
             drawWeaponTrails(this.ctx, this.weaponTrails);
 
-            for (const bullet of this.bullets) {
-                bullet.draw(this.ctx);
-            }
+            // Bullets
+            for (const bullet of this.bullets) bullet.draw(this.ctx);
 
+            // Players
             if (this.player1) this.player1.draw(this.ctx);
             if (this.player2) this.player2.draw(this.ctx);
 
+            // Particles
             this.particleSystem.draw(this.ctx);
 
+            // Muzzle flash
             if (this.player1 && this.player1.weapon.muzzleFlashFrames > 0) {
-                drawMuzzleFlash(this.ctx, this.player1.x + this.player1.facingDir * 50, this.player1.y - 50, this.player1.facingDir);
+                drawMuzzleFlashOverlay(this.ctx, this.player1.x + this.player1.facingDir * 50, this.player1.y - 50, this.player1.facingDir);
             }
             if (this.player2 && this.player2.weapon.muzzleFlashFrames > 0) {
-                drawMuzzleFlash(this.ctx, this.player2.x + this.player2.facingDir * 50, this.player2.y - 50, this.player2.facingDir);
+                drawMuzzleFlashOverlay(this.ctx, this.player2.x + this.player2.facingDir * 50, this.player2.y - 50, this.player2.facingDir);
             }
 
+            // HUD
             this.hud.drawHealthBars(this.ctx, this.player1, this.player2);
             this.hud.drawSpecialMeters(this.ctx, this.player1, this.player2);
             this.hud.drawTimer(this.ctx, this.timer, this.maxTimer);
@@ -1170,10 +1199,10 @@ class Game {
         this.ctx.fillStyle = gradient;
         this.ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
+        // Grid overlay
         this.ctx.save();
         this.ctx.strokeStyle = 'rgba(139, 92, 246, 0.15)';
         this.ctx.lineWidth = 1;
-
         for (let x = 0; x < CANVAS_WIDTH; x += 40) {
             this.ctx.beginPath();
             this.ctx.moveTo(x, 0);
@@ -1188,15 +1217,13 @@ class Game {
         }
         this.ctx.restore();
 
+        // Skyline silhouette
         this.ctx.save();
         this.ctx.fillStyle = 'rgba(139, 92, 246, 0.08)';
         const skyline = [
-            { x: 50, w: 80, h: 200 },
-            { x: 150, w: 60, h: 150 },
-            { x: 250, w: 100, h: 250 },
-            { x: 400, w: 70, h: 180 },
-            { x: 900, w: 90, h: 220 },
-            { x: 1020, w: 60, h: 160 },
+            { x: 50, w: 80, h: 200 }, { x: 150, w: 60, h: 150 },
+            { x: 250, w: 100, h: 250 }, { x: 400, w: 70, h: 180 },
+            { x: 900, w: 90, h: 220 }, { x: 1020, w: 60, h: 160 },
             { x: 1120, w: 80, h: 190 }
         ];
         for (const building of skyline) {
@@ -1212,4 +1239,5 @@ class Game {
     }
 }
 
+// Initialize game
 const game = new Game();
