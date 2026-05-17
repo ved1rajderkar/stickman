@@ -328,6 +328,123 @@ export class HUD {
         }
     }
     
+    drawGameHUD(ctx, playerName, level, player, enemies, timer, maxTimer, levelConfig) {
+        const isBoss = levelConfig && levelConfig.isBoss;
+
+        ctx.save();
+
+        ctx.font = 'bold 14px Orbitron';
+        ctx.fillStyle = '#00FFFF';
+        ctx.shadowColor = '#00FFFF';
+        ctx.shadowBlur = 8;
+        ctx.textAlign = 'left';
+        ctx.fillText(playerName, 20, 30);
+
+        ctx.font = 'bold 16px Orbitron';
+        ctx.fillStyle = isBoss ? '#FF0000' : '#FFD700';
+        ctx.shadowColor = isBoss ? '#FF0000' : '#FFD700';
+        ctx.fillText(isBoss ? `BOSS ${level}` : `Level ${level}`, 20, 52);
+
+        const hpPercent = player.hp / player.maxHp;
+        const barWidth = 200;
+        const barHeight = 16;
+        const barX = 20;
+        const barY = 65;
+
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#1a1a2e';
+        ctx.fillRect(barX, barY, barWidth, barHeight);
+        ctx.strokeStyle = '#00FFFF';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(barX, barY, barWidth, barHeight);
+
+        let barColor;
+        if (hpPercent > 0.6) barColor = '#22cc44';
+        else if (hpPercent > 0.3) barColor = '#ccaa22';
+        else barColor = '#cc4422';
+
+        ctx.fillStyle = barColor;
+        ctx.fillRect(barX + 2, barY + 2, (barWidth - 4) * hpPercent, barHeight - 4);
+
+        ctx.font = '10px Orbitron';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${Math.ceil(player.hp)} / ${player.maxHp}`, barX + barWidth / 2, barY + 12);
+
+        ctx.textAlign = 'right';
+        ctx.font = 'bold 24px Orbitron';
+        if (timer <= 10 && timer > 0) {
+            const flash = Math.sin(Date.now() * 0.015) > 0;
+            ctx.fillStyle = flash ? '#FF0000' : '#FF6666';
+            ctx.shadowColor = '#FF0000';
+            ctx.shadowBlur = 15;
+        } else {
+            ctx.fillStyle = '#FFFFFF';
+            ctx.shadowColor = '#6366f1';
+            ctx.shadowBlur = 10;
+        }
+        ctx.fillText(timer.toString(), ctx.canvas.width - 20, 35);
+
+        ctx.font = '10px Orbitron';
+        ctx.fillStyle = '#888888';
+        ctx.shadowBlur = 0;
+        ctx.fillText('TIME', ctx.canvas.width - 20, 50);
+
+        let enemyCount = 0;
+        let totalEnemyHp = 0;
+        let currentEnemyHp = 0;
+        for (const enemy of enemies) {
+            if (enemy.hp > 0) {
+                enemyCount++;
+                currentEnemyHp += enemy.hp;
+            }
+            totalEnemyHp += enemy.maxHp;
+        }
+
+        if (enemies.length > 0) {
+            const enemyBarWidth = 200;
+            const enemyBarHeight = 12;
+            const enemyBarX = ctx.canvas.width - 20 - enemyBarWidth;
+            const enemyBarY = 60;
+
+            ctx.fillStyle = '#1a1a2e';
+            ctx.fillRect(enemyBarX, enemyBarY, enemyBarWidth, enemyBarHeight);
+            ctx.strokeStyle = '#FF4444';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(enemyBarX, enemyBarY, enemyBarWidth, enemyBarHeight);
+
+            const enemyHpPercent = totalEnemyHp > 0 ? currentEnemyHp / totalEnemyHp : 0;
+            ctx.fillStyle = '#FF4444';
+            ctx.fillRect(enemyBarX + 2, enemyBarY + 2, (enemyBarWidth - 4) * enemyHpPercent, enemyBarHeight - 4);
+
+            ctx.font = '9px Orbitron';
+            ctx.fillStyle = '#FFFFFF';
+            ctx.textAlign = 'center';
+            ctx.fillText(`${enemyCount} enemy${enemyCount !== 1 ? 'ies' : ''}`, enemyBarX + enemyBarWidth / 2, enemyBarY + 10);
+        }
+
+        if (player.comboCount >= 2) {
+            let comboColor;
+            if (player.comboCount >= 12) comboColor = '#FF0000';
+            else if (player.comboCount >= 7) comboColor = '#FF8800';
+            else comboColor = '#FFD700';
+
+            const scale = 1 + Math.sin(Date.now() * 0.01) * 0.05;
+            ctx.save();
+            ctx.translate(ctx.canvas.width / 2, 80);
+            ctx.scale(scale, scale);
+            ctx.font = 'bold 18px Orbitron';
+            ctx.fillStyle = comboColor;
+            ctx.shadowColor = comboColor;
+            ctx.shadowBlur = 12;
+            ctx.textAlign = 'center';
+            ctx.fillText(`COMBO x${player.comboCount}`, 0, 0);
+            ctx.restore();
+        }
+
+        ctx.restore();
+    }
+
     clear() {
         this.hitNumbers = [];
         this.damageFlash = { p1: 0, p2: 0 };

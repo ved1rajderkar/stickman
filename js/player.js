@@ -14,7 +14,7 @@ import {
     calculateKnockback,
     platforms
 } from './physics.js';
-import { Economy, PERKS } from './economy.js';
+import { Economy } from './economy.js';
 
 export const PlayerState = {
     IDLE: 'IDLE',
@@ -42,6 +42,7 @@ export class Player {
         this.color = color;
         this.glowColor = glowColor;
         this.playerNum = playerNum;
+        this.name = playerNum === 1 ? 'Player' : 'Enemy';
 
         // Pillar 2: Apply roguelite perk modifiers to base stats
         const speedLevel = Economy.getPerkLevel('movement_speed');

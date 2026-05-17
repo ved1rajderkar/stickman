@@ -3,110 +3,82 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Combat Arena - Fighting Stick Man</title>
+    <title>Stickman - Level Based Action Game</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Press+Start+2P&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body class="bg-gray-900 overflow-hidden select-none">
     <div id="game-container" class="relative w-screen h-screen flex items-center justify-center">
-        <canvas id="gameCanvas" class="border-2 border-purple-500/50 shadow-[0_0_30px_rgba(168,85,247,0.4)]"></canvas>
-        
-        <!-- Main Menu Overlay -->
-        <div id="main-menu" class="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-10">
-            <h1 class="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-500 to-red-500 mb-2" style="font-family: 'Press Start 2P', cursive; text-shadow: 0 0 20px rgba(168,85,247,0.8);">
-                COMBAT ARENA
-            </h1>
-            <p class="text-xl text-purple-300 mb-12" style="font-family: 'Orbitron', sans-serif;">Fighting Stick Man</p>
-            
-            <div class="flex flex-col gap-4">
-                <button id="btn-1v1" class="menu-btn px-8 py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-lg transition-all duration-200 hover:scale-105 hover:shadow-[0_0_20px_rgba(168,85,247,0.6)]" style="font-family: 'Orbitron', sans-serif;">
-                    1v1 LOCAL
+        <canvas id="gameCanvas" class="border-2 border-cyan-500/30 shadow-[0_0_30px_rgba(0,255,255,0.2)]"></canvas>
+
+        <!-- Main Menu -->
+        <div id="main-menu" class="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-[#0a0e27] via-[#1a1a2e] to-[#0a0e27] z-10">
+            <div class="mb-2">
+                <h1 class="text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-500 to-cyan-400 animate-pulse-glow" style="font-family: 'Orbitron', sans-serif; text-shadow: 0 0 40px rgba(0,255,255,0.5);">
+                    STICKMAN
+                </h1>
+            </div>
+            <p class="text-lg text-cyan-300/70 mb-12 tracking-widest" style="font-family: 'Orbitron', sans-serif;">LEVEL BASED ACTION</p>
+
+            <div class="flex flex-col gap-4 w-64">
+                <button id="btn-play" class="menu-btn-primary px-8 py-4 text-white font-bold rounded-lg transition-all duration-200 hover:scale-105">
+                    ▶ PLAY
                 </button>
-                <button id="btn-vs-cpu" class="menu-btn px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg transition-all duration-200 hover:scale-105 hover:shadow-[0_0_20px_rgba(59,130,246,0.6)]" style="font-family: 'Orbitron', sans-serif;">
-                    VS CPU
+                <button id="btn-skins" class="menu-btn-secondary px-8 py-3 text-white font-bold rounded-lg transition-all duration-200 hover:scale-105">
+                    🎨 SKINS
                 </button>
-                <button id="btn-survival" class="menu-btn px-8 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg transition-all duration-200 hover:scale-105 hover:shadow-[0_0_20px_rgba(239,68,68,0.6)]" style="font-family: 'Orbitron', sans-serif;">
-                    SURVIVAL
+                <button id="btn-stats" class="menu-btn-secondary px-8 py-3 text-white font-bold rounded-lg transition-all duration-200 hover:scale-105">
+                    📊 STATS
                 </button>
-                <button id="btn-training" class="menu-btn px-8 py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg transition-all duration-200 hover:scale-105 hover:shadow-[0_0_20px_rgba(34,197,94,0.6)]" style="font-family: 'Orbitron', sans-serif;">
-                    TRAINING
-                </button>
-                <button id="btn-settings" class="menu-btn px-8 py-3 bg-gray-600 hover:bg-gray-500 text-white font-bold rounded-lg transition-all duration-200 hover:scale-105 hover:shadow-[0_0_20px_rgba(107,114,128,0.6)]" style="font-family: 'Orbitron', sans-serif;">
-                    SETTINGS
-                </button>
-                <button id="btn-shop" class="menu-btn px-8 py-3 bg-yellow-600 hover:bg-yellow-500 text-white font-bold rounded-lg transition-all duration-200 hover:scale-105 hover:shadow-[0_0_20px_rgba(234,179,8,0.6)]" style="font-family: 'Orbitron', sans-serif;">
-                    SHOP 🪙
+                <button id="btn-settings" class="menu-btn-secondary px-8 py-3 text-white font-bold rounded-lg transition-all duration-200 hover:scale-105">
+                    ⚙ SETTINGS
                 </button>
             </div>
-            
-            <p class="mt-12 text-gray-500 text-sm" style="font-family: 'Orbitron', sans-serif;">Press any key to start</p>
+
+            <p class="mt-12 text-gray-600 text-xs" style="font-family: 'Orbitron', sans-serif;">Press ESC to pause during gameplay</p>
         </div>
 
-        <!-- Character Select Overlay -->
-        <div id="character-select" class="absolute inset-0 flex flex-col items-center justify-center bg-black/90 z-20 hidden">
-            <h2 class="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500 mb-8" style="font-family: 'Press Start 2P', cursive; text-shadow: 0 0 20px rgba(168,85,247,0.8);">
-                SELECT FIGHTER
-            </h2>
-            
-            <div class="flex gap-16 items-center">
-                <!-- Player 1 Panel -->
-                <div class="flex flex-col items-center">
-                    <p class="text-red-400 text-xl mb-4 font-bold" style="font-family: 'Orbitron', sans-serif;">PLAYER 1</p>
-                    <canvas id="p1-preview" width="120" height="160" class="mb-4"></canvas>
-                    <div id="p1-color-grid" class="grid grid-cols-4 gap-2 mb-4">
-                    </div>
-                    <p id="p1-color-name" class="text-red-300 text-sm" style="font-family: 'Orbitron', sans-serif;">Crimson</p>
-                    <div id="p1-weapon-select" class="flex gap-2 mt-4">
-                    </div>
-                </div>
-                
-                <!-- VS Text -->
-                <div class="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-400 to-orange-500" style="font-family: 'Press Start 2P', cursive; text-shadow: 0 0 30px rgba(250,204,21,0.8);">
-                    VS
-                </div>
-                
-                <!-- Player 2 Panel -->
-                <div class="flex flex-col items-center">
-                    <p class="text-blue-400 text-xl mb-4 font-bold" style="font-family: 'Orbitron', sans-serif;">PLAYER 2</p>
-                    <canvas id="p2-preview" width="120" height="160" class="mb-4"></canvas>
-                    <div id="p2-color-grid" class="grid grid-cols-4 gap-2 mb-4">
-                    </div>
-                    <p id="p2-color-name" class="text-blue-300 text-sm" style="font-family: 'Orbitron', sans-serif;">Cobalt</p>
-                    <div id="p2-weapon-select" class="flex gap-2 mt-4">
-                    </div>
-                </div>
-            </div>
-            
-            <button id="btn-fight" class="mt-8 px-12 py-4 bg-gradient-to-r from-red-600 to-orange-500 text-white text-2xl font-black rounded-lg transition-all duration-200 hover:scale-110 hover:shadow-[0_0_30px_rgba(239,68,68,0.8)] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100" style="font-family: 'Press Start 2P', cursive;" disabled>
-                FIGHT!
+        <!-- Name Input Overlay -->
+        <div id="name-input-overlay" class="absolute inset-0 flex flex-col items-center justify-center bg-black/90 z-20 hidden">
+            <h2 class="text-4xl font-black text-cyan-400 mb-4" style="font-family: 'Orbitron', sans-serif;">ENTER YOUR NAME</h2>
+            <p class="text-gray-400 mb-8" style="font-family: 'Inter', sans-serif;">Choose your fighter identity</p>
+            <input id="input-player-name" type="text" maxlength="16" placeholder="Player1" class="bg-gray-800 border-2 border-cyan-500/50 text-white px-6 py-3 rounded-lg text-xl text-center focus:outline-none focus:border-cyan-400 w-64" style="font-family: 'Orbitron', sans-serif;">
+            <button id="btn-name-confirm" class="mt-6 px-8 py-3 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-lg transition-all duration-200 hover:scale-105" style="font-family: 'Orbitron', sans-serif;">
+                CONFIRM
             </button>
         </div>
 
-        <!-- Stage Select Overlay -->
-        <div id="stage-select" class="absolute inset-0 flex flex-col items-center justify-center bg-black/90 z-20 hidden">
-            <h2 class="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-cyan-500 mb-8" style="font-family: 'Press Start 2P', cursive; text-shadow: 0 0 20px rgba(34,197,94,0.8);">
-                SELECT STAGE
+        <!-- Level Select Overlay -->
+        <div id="level-select-overlay" class="absolute inset-0 flex flex-col items-center justify-center bg-black/90 z-20 hidden">
+            <h2 class="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500 mb-6" style="font-family: 'Orbitron', sans-serif;">
+                NEXT CHALLENGE
             </h2>
-            
-            <div class="flex gap-8">
-                <div id="stage-neon-city" class="stage-card w-64 h-40 bg-gradient-to-br from-purple-900 to-cyan-900 rounded-lg cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-[0_0_20px_rgba(168,85,247,0.6)] border-2 border-transparent hover:border-purple-400 flex items-center justify-center">
-                    <p class="text-white text-xl font-bold" style="font-family: 'Orbitron', sans-serif;">NEON CITY</p>
-                </div>
-                <div id="stage-blood-dojo" class="stage-card w-64 h-40 bg-gradient-to-br from-red-900 to-orange-900 rounded-lg cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-[0_0_20px_rgba(239,68,68,0.6)] border-2 border-transparent hover:border-red-400 flex items-center justify-center opacity-50">
-                    <p class="text-white text-xl font-bold" style="font-family: 'Orbitron', sans-serif;">BLOOD DOJO 🔒</p>
-                </div>
-                <div id="stage-cyber-void" class="stage-card w-64 h-40 bg-gradient-to-br from-black to-green-900 rounded-lg cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-[0_0_20px_rgba(34,197,94,0.6)] border-2 border-transparent hover:border-green-400 flex items-center justify-center opacity-50">
-                    <p class="text-white text-xl font-bold" style="font-family: 'Orbitron', sans-serif;">CYBER VOID 🔒</p>
-                </div>
+
+            <div class="bg-gray-800/80 border border-cyan-500/30 rounded-xl p-8 mb-8 text-center">
+                <p id="level-display" class="text-5xl font-black text-cyan-400 mb-2" style="font-family: 'Orbitron', sans-serif;">Level 1</p>
+                <p id="difficulty-display" class="text-xl text-cyan-400 mb-4" style="font-family: 'Orbitron', sans-serif;">Easy</p>
+                <p id="boss-warning" class="text-red-400 text-lg hidden animate-pulse" style="font-family: 'Orbitron', sans-serif;">⚠ BOSS BATTLE ⚠</p>
             </div>
+
+            <button id="btn-start-level" class="px-12 py-4 bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500 text-white text-2xl font-black rounded-lg transition-all duration-200 hover:scale-110" style="font-family: 'Orbitron', sans-serif;">
+                START
+            </button>
+        </div>
+
+        <!-- Video Overlay -->
+        <div id="video-overlay" class="absolute inset-0 flex flex-col items-center justify-center bg-black z-30 hidden">
+            <video id="story-video" class="max-w-full max-h-full" controls></video>
+            <button id="btn-skip-video" class="absolute bottom-8 right-8 px-6 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg hidden" style="font-family: 'Orbitron', sans-serif;">
+                SKIP ▶
+            </button>
         </div>
 
         <!-- Pause Overlay -->
         <div id="pause-overlay" class="absolute inset-0 flex flex-col items-center justify-center bg-black/70 z-30 hidden">
-            <h2 class="text-5xl font-black text-white mb-8" style="font-family: 'Press Start 2P', cursive; text-shadow: 0 0 20px rgba(255,255,255,0.5);">
+            <h2 class="text-5xl font-black text-white mb-8" style="font-family: 'Orbitron', sans-serif; text-shadow: 0 0 20px rgba(255,255,255,0.5);">
                 PAUSED
             </h2>
             <div class="flex flex-col gap-4">
@@ -117,43 +89,18 @@
                     RESTART
                 </button>
                 <button id="btn-quit" class="menu-btn px-8 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg transition-all duration-200 hover:scale-105" style="font-family: 'Orbitron', sans-serif;">
-                    QUIT TO MENU
+                    MAIN MENU
                 </button>
             </div>
         </div>
 
         <!-- Settings Overlay -->
         <div id="settings-overlay" class="absolute inset-0 flex flex-col items-center justify-center bg-black/90 z-30 hidden">
-            <h2 class="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500 mb-8" style="font-family: 'Press Start 2P', cursive;">
+            <h2 class="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500 mb-8" style="font-family: 'Orbitron', sans-serif;">
                 SETTINGS
             </h2>
-            
+
             <div class="grid grid-cols-2 gap-6 max-w-2xl">
-                <div class="flex items-center justify-between">
-                    <label class="text-white" style="font-family: 'Orbitron', sans-serif;">Timer</label>
-                    <select id="setting-timer" class="bg-gray-700 text-white px-3 py-1 rounded">
-                        <option value="30">30s</option>
-                        <option value="60" selected>60s</option>
-                        <option value="99">99s</option>
-                        <option value="0">Off</option>
-                    </select>
-                </div>
-                <div class="flex items-center justify-between">
-                    <label class="text-white" style="font-family: 'Orbitron', sans-serif;">Rounds</label>
-                    <select id="setting-rounds" class="bg-gray-700 text-white px-3 py-1 rounded">
-                        <option value="1">1</option>
-                        <option value="3" selected>3</option>
-                        <option value="5">5</option>
-                    </select>
-                </div>
-                <div class="flex items-center justify-between">
-                    <label class="text-white" style="font-family: 'Orbitron', sans-serif;">Hazards</label>
-                    <input type="checkbox" id="setting-hazards" class="w-5 h-5">
-                </div>
-                <div class="flex items-center justify-between">
-                    <label class="text-white" style="font-family: 'Orbitron', sans-serif;">Weapon Drops</label>
-                    <input type="checkbox" id="setting-weapon-drops" checked class="w-5 h-5">
-                </div>
                 <div class="flex items-center justify-between">
                     <label class="text-white" style="font-family: 'Orbitron', sans-serif;">Screen Shake</label>
                     <input type="checkbox" id="setting-screen-shake" checked class="w-5 h-5">
@@ -167,77 +114,110 @@
                     <input type="range" id="setting-volume" min="0" max="10" value="7" class="w-24">
                 </div>
                 <div class="flex items-center justify-between">
-                    <label class="text-white" style="font-family: 'Orbitron', sans-serif;">AI Difficulty</label>
-                    <select id="setting-difficulty" class="bg-gray-700 text-white px-3 py-1 rounded">
-                        <option value="easy">Easy</option>
-                        <option value="medium" selected>Medium</option>
-                        <option value="hard">Hard</option>
-                    </select>
+                    <label class="text-white" style="font-family: 'Orbitron', sans-serif;">Show Controls</label>
+                    <input type="checkbox" id="setting-controls" checked class="w-5 h-5">
                 </div>
             </div>
-            
+
             <button id="btn-settings-back" class="mt-8 px-8 py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-lg transition-all duration-200 hover:scale-105" style="font-family: 'Orbitron', sans-serif;">
                 BACK
             </button>
         </div>
 
-        <!-- Round Announcement Overlay -->
-        <div id="round-announcement" class="absolute inset-0 flex items-center justify-center z-25 pointer-events-none hidden">
-            <div class="text-center">
-                <p id="round-text" class="text-6xl font-black text-white mb-4" style="font-family: 'Press Start 2P', cursive; text-shadow: 0 0 30px rgba(255,255,255,0.8);"></p>
-                <p id="fight-text" class="text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-yellow-500" style="font-family: 'Press Start 2P', cursive; text-shadow: 0 0 40px rgba(239,68,68,0.8);"></p>
-            </div>
-        </div>
-
-        <!-- KO Screen Overlay -->
-        <div id="ko-screen" class="absolute inset-0 flex flex-col items-center justify-center bg-black/60 z-25 hidden">
-            <p id="ko-text" class="text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-yellow-500 to-red-500 mb-4" style="font-family: 'Press Start 2P', cursive; text-shadow: 0 0 40px rgba(239,68,68,0.8);">
-                K.O.!
-            </p>
-            <p id="ko-subtext" class="text-2xl text-white" style="font-family: 'Orbitron', sans-serif;"></p>
-            <p id="ko-special" class="text-xl text-yellow-400 mt-2 hidden" style="font-family: 'Press Start 2P', cursive;"></p>
-            <div id="gold-reward-display" class="mt-4 text-yellow-400 text-lg hidden" style="font-family: 'Orbitron', sans-serif;"></div>
-            <button id="btn-watch-ad-double" class="mt-4 px-6 py-2 bg-yellow-600 hover:bg-yellow-500 text-white font-bold rounded-lg hidden transition-all duration-200 hover:scale-105" style="font-family: 'Orbitron', sans-serif;">
-                ▶ WATCH AD — Double Gold!
-            </button>
-        </div>
-
-        <!-- Shop Overlay -->
-        <div id="shop-overlay" class="absolute inset-0 flex flex-col items-center bg-black/95 z-30 hidden overflow-y-auto">
-            <h2 class="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500 mt-8 mb-2" style="font-family: 'Press Start 2P', cursive;">
-                ARMORY
+        <!-- Stats Overlay -->
+        <div id="stats-overlay" class="absolute inset-0 flex flex-col items-center bg-black/95 z-30 hidden overflow-y-auto">
+            <h2 class="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500 mt-8 mb-8" style="font-family: 'Orbitron', sans-serif;">
+                STATS & ACHIEVEMENTS
             </h2>
-            <p id="shop-gold-display" class="text-yellow-400 text-xl mb-8" style="font-family: 'Orbitron', sans-serif;">🪙 0</p>
 
-            <h3 class="text-xl text-white mb-4" style="font-family: 'Orbitron', sans-serif;">WEAPONS</h3>
-            <div id="shop-weapons" class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8 px-4">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 px-4 w-full max-w-4xl">
+                <div class="stat-card bg-gray-800/80 border border-cyan-500/30 rounded-lg p-4 text-center">
+                    <p class="text-gray-400 text-sm" style="font-family: 'Orbitron', sans-serif;">Levels</p>
+                    <p id="stat-levels" class="text-3xl font-black text-cyan-400" style="font-family: 'Orbitron', sans-serif;">0</p>
+                </div>
+                <div class="stat-card bg-gray-800/80 border border-cyan-500/30 rounded-lg p-4 text-center">
+                    <p class="text-gray-400 text-sm" style="font-family: 'Orbitron', sans-serif;">Playtime</p>
+                    <p id="stat-playtime" class="text-3xl font-black text-cyan-400" style="font-family: 'Orbitron', sans-serif;">0s</p>
+                </div>
+                <div class="stat-card bg-gray-800/80 border border-cyan-500/30 rounded-lg p-4 text-center">
+                    <p class="text-gray-400 text-sm" style="font-family: 'Orbitron', sans-serif;">Highest</p>
+                    <p id="stat-highest" class="text-3xl font-black text-cyan-400" style="font-family: 'Orbitron', sans-serif;">1</p>
+                </div>
+                <div class="stat-card bg-gray-800/80 border border-cyan-500/30 rounded-lg p-4 text-center">
+                    <p class="text-gray-400 text-sm" style="font-family: 'Orbitron', sans-serif;">Bosses</p>
+                    <p id="stat-bosses" class="text-3xl font-black text-cyan-400" style="font-family: 'Orbitron', sans-serif;">0</p>
+                </div>
+                <div class="stat-card bg-gray-800/80 border border-cyan-500/30 rounded-lg p-4 text-center">
+                    <p class="text-gray-400 text-sm" style="font-family: 'Orbitron', sans-serif;">Streak</p>
+                    <p id="stat-streak" class="text-3xl font-black text-cyan-400" style="font-family: 'Orbitron', sans-serif;">0</p>
+                </div>
+                <div class="stat-card bg-gray-800/80 border border-cyan-500/30 rounded-lg p-4 text-center">
+                    <p class="text-gray-400 text-sm" style="font-family: 'Orbitron', sans-serif;">Best Streak</p>
+                    <p id="stat-best-streak" class="text-3xl font-black text-cyan-400" style="font-family: 'Orbitron', sans-serif;">0</p>
+                </div>
+                <div class="stat-card bg-gray-800/80 border border-cyan-500/30 rounded-lg p-4 text-center">
+                    <p class="text-gray-400 text-sm" style="font-family: 'Orbitron', sans-serif;">Deaths</p>
+                    <p id="stat-deaths" class="text-3xl font-black text-red-400" style="font-family: 'Orbitron', sans-serif;">0</p>
+                </div>
             </div>
 
-            <h3 class="text-xl text-white mb-4" style="font-family: 'Orbitron', sans-serif;">STAGES</h3>
-            <div id="shop-stages" class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8 px-4">
+            <h3 class="text-2xl text-white mb-4" style="font-family: 'Orbitron', sans-serif;">ACHIEVEMENTS</h3>
+            <div id="achievements-list" class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-8 px-4 w-full max-w-4xl">
             </div>
 
-            <button id="btn-shop-back" class="mb-8 px-8 py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-lg transition-all duration-200 hover:scale-105" style="font-family: 'Orbitron', sans-serif;">
+            <button id="btn-stats-back" class="mb-8 px-8 py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-lg transition-all duration-200 hover:scale-105" style="font-family: 'Orbitron', sans-serif;">
                 BACK
             </button>
         </div>
 
-        <!-- Revive Offer Overlay -->
-        <div id="revive-offer" class="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-30 hidden">
-            <h3 class="text-3xl font-black text-white mb-4" style="font-family: 'Press Start 2P', cursive;">CONTINUE?</h3>
-            <p class="text-lg text-gray-300 mb-6" style="font-family: 'Orbitron', sans-serif;">Watch a short ad to revive with 30 HP</p>
-            <button id="btn-watch-ad-revive" class="px-8 py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg mb-4 transition-all duration-200 hover:scale-105" style="font-family: 'Orbitron', sans-serif;">
-                ▶ WATCH AD (Revive)
-            </button>
-            <button id="btn-gold-revive" class="px-8 py-3 bg-yellow-600 hover:bg-yellow-500 text-white font-bold rounded-lg mb-4 transition-all duration-200 hover:scale-105" style="font-family: 'Orbitron', sans-serif;">
-                🪙 50 Gold Revive
-            </button>
-            <button id="btn-no-revive" class="px-8 py-3 bg-gray-600 hover:bg-gray-500 text-white font-bold rounded-lg transition-all duration-200 hover:scale-105" style="font-family: 'Orbitron', sans-serif;">
-                Give Up
+        <!-- Skin Select Overlay -->
+        <div id="skin-select-overlay" class="absolute inset-0 flex flex-col items-center bg-black/95 z-30 hidden overflow-y-auto">
+            <h2 class="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500 mt-8 mb-8" style="font-family: 'Orbitron', sans-serif;">
+                CHARACTER SKINS
+            </h2>
+
+            <div id="skins-grid" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 px-4 w-full max-w-4xl">
+            </div>
+
+            <button id="btn-skins-back" class="mb-8 px-8 py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-lg transition-all duration-200 hover:scale-105" style="font-family: 'Orbitron', sans-serif;">
+                BACK
             </button>
         </div>
 
-        <!-- Mobile Controls Overlay -->
+        <!-- Round Announcement -->
+        <div id="round-announcement" class="absolute inset-0 flex items-center justify-center z-25 pointer-events-none hidden">
+            <div class="text-center">
+                <p id="round-text" class="text-6xl font-black text-white mb-4" style="font-family: 'Orbitron', sans-serif; text-shadow: 0 0 30px rgba(255,255,255,0.8);"></p>
+                <p id="fight-text" class="text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-yellow-500" style="font-family: 'Orbitron', sans-serif; text-shadow: 0 0 40px rgba(239,68,68,0.8);"></p>
+            </div>
+        </div>
+
+        <!-- Level Complete Overlay -->
+        <div id="level-complete-overlay" class="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-30 hidden">
+            <p id="lc-boss-banner" class="text-2xl font-black text-yellow-400 mb-2 hidden animate-pulse" style="font-family: 'Orbitron', sans-serif;">👑 BOSS DEFEATED 👑</p>
+            <p id="lc-level" class="text-4xl font-black text-cyan-400 mb-2" style="font-family: 'Orbitron', sans-serif;">Level 1</p>
+            <p id="lc-result" class="text-3xl font-black text-cyan-400 mb-4" style="font-family: 'Orbitron', sans-serif;">LEVEL COMPLETE!</p>
+            <p id="lc-stars" class="text-4xl mb-4">⭐⭐⭐</p>
+
+            <div class="bg-gray-800/80 border border-cyan-500/30 rounded-lg p-4 mb-6 text-center">
+                <p id="lc-time" class="text-lg text-white mb-1" style="font-family: 'Orbitron', sans-serif;">Time: 45s</p>
+                <p id="lc-hp" class="text-lg text-white mb-1" style="font-family: 'Orbitron', sans-serif;">HP: 85%</p>
+                <p id="lc-deaths" class="text-lg text-white" style="font-family: 'Orbitron', sans-serif;">Deaths: 0</p>
+            </div>
+
+            <p id="lc-checkpoint" class="text-purple-400 text-lg mb-4 hidden" style="font-family: 'Orbitron', sans-serif;">🎬 Story Checkpoint Unlocked!</p>
+
+            <div class="flex gap-4">
+                <button id="btn-next-level" class="px-8 py-3 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-lg transition-all duration-200 hover:scale-105" style="font-family: 'Orbitron', sans-serif;">
+                    NEXT LEVEL ▶
+                </button>
+                <button id="btn-retry-level" class="px-8 py-3 bg-gray-600 hover:bg-gray-500 text-white font-bold rounded-lg transition-all duration-200 hover:scale-105" style="font-family: 'Orbitron', sans-serif;">
+                    RETRY
+                </button>
+            </div>
+        </div>
+
+        <!-- Mobile Controls -->
         <div id="mobile-controls" class="hidden absolute inset-0 pointer-events-none z-5">
             <div id="dpad-zone" class="absolute bottom-8 left-8 pointer-events-auto">
                 <div class="relative w-32 h-32">

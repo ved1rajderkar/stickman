@@ -68,7 +68,13 @@ class SoundManager {
     play(name, volumeMultiplier = 1.0) {
         if (this.muted || !this.initialized) return;
         const snd = this.sounds[name];
-        if (!snd) return;
+        if (!snd) {
+            if (name === 'level_complete') {
+                this.synthLevelComplete();
+                return;
+            }
+            return;
+        }
         try {
             const clone = snd.cloneNode();
             clone.volume = Math.min(1.0, this.volume * volumeMultiplier);
@@ -552,14 +558,34 @@ class SoundManager {
         osc.stop(ctx.currentTime + 0.05);
     }
 
+    /**
+     * Level complete — triumphant ascending fanfare
+     */
+    synthLevelComplete() {
+        if (!this.webAudioReady || this.muted) return;
+        const ctx = this.audioCtx;
+        const notes = [523.25, 659.25, 783.99, 1046.50];
+        notes.forEach((freq, i) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            const startTime = ctx.currentTime + i * 0.15;
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+            gain.gain.setValueAtTime(0.25, startTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.4);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(startTime);
+            osc.stop(startTime + 0.4);
+        });
+    }
+
     setVolume(val) {
         this.volume = val / 10;
         Object.values(this.sounds).forEach(s => { try { s.volume = this.volume; } catch (e) {} });
     }
 
     setMuted(val) { this.muted = val; }
-    muteForAd() { this.muted = true; this.stopBGM(); }
-    unmuteAfterAd() { this.muted = false; this.startBGM(); }
 }
 
 export const soundManager = new SoundManager();
@@ -577,9 +603,6 @@ export class AssetLoader {
     }
 
     startLoading() {
-        try {
-            if (window.CrazyGames?.SDK?.game) window.CrazyGames.SDK.game.sdkGameLoadingStart();
-        } catch (e) {}
     }
 
     addAsset(type, id, src) {
@@ -625,7 +648,6 @@ export class AssetLoader {
 
     finishLoading() {
         this.loaded = true;
-        try { if (window.CrazyGames?.SDK?.game) window.CrazyGames.SDK.game.sdkGameLoadingStop(); } catch (e) {}
         if (this.onComplete) this.onComplete();
     }
 
