@@ -105,7 +105,7 @@ class Game {
             'setting-screen-shake', 'setting-blood', 'setting-volume', 'setting-controls',
             'btn-name-confirm', 'input-player-name', 'btn-start-level',
             'btn-p1-color-select', 'btn-p2-color-select',
-            'btn-survival-retry', 'btn-match-menu'
+            'btn-survival-retry', 'btn-survival-menu', 'btn-match-retry', 'btn-match-menu'
         ];
         for (const id of ids) {
             const el = document.getElementById(id);
@@ -142,6 +142,8 @@ class Game {
         document.getElementById('btn-stage-fight')?.addEventListener('click', () => this.startFight());
 
         document.getElementById('btn-survival-retry')?.addEventListener('click', () => this.startFight());
+        document.getElementById('btn-survival-menu')?.addEventListener('click', () => this.quitToMenu());
+        document.getElementById('btn-match-retry')?.addEventListener('click', () => this.restartMatch());
         document.getElementById('btn-match-menu')?.addEventListener('click', () => this.quitToMenu());
 
         document.getElementById('setting-screen-shake')?.addEventListener('change', (e) => {

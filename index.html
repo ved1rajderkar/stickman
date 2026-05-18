@@ -24,6 +24,10 @@
             <p class="text-lg text-cyan-300/70 mb-12 tracking-widest" style="font-family: 'Orbitron', sans-serif;">FIGHTING ARENA</p>
 
             <div class="flex flex-col gap-4 w-64">
+                <div class="flex gap-2 mb-2">
+                    <input id="input-player-name" type="text" placeholder="Player Name" maxlength="12" class="flex-1 px-3 py-2 bg-gray-800 border border-cyan-500/30 rounded-lg text-white text-sm font-bold placeholder-gray-500 focus:outline-none focus:border-cyan-400" style="font-family: 'Orbitron', sans-serif;">
+                    <button id="btn-name-confirm" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-lg transition-all text-sm" style="font-family: 'Orbitron', sans-serif;">OK</button>
+                </div>
                 <button id="btn-play" class="menu-btn-primary px-8 py-4 text-white font-bold rounded-lg transition-all duration-200 hover:scale-105">
                     FIGHT
                 </button>
@@ -206,7 +210,7 @@
             <p id="match-winner" class="text-5xl font-black text-cyan-400 mb-4" style="font-family: 'Orbitron', sans-serif;"></p>
             <p id="match-score" class="text-3xl text-white mb-6" style="font-family: 'Orbitron', sans-serif;"></p>
             <div class="flex gap-4">
-                <button id="btn-survival-retry" class="px-8 py-3 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-lg transition-all hover:scale-105" style="font-family: 'Orbitron', sans-serif;">REMATCH</button>
+                <button id="btn-match-retry" class="px-8 py-3 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-lg transition-all hover:scale-105" style="font-family: 'Orbitron', sans-serif;">REMATCH</button>
                 <button id="btn-match-menu" class="px-8 py-3 bg-gray-600 hover:bg-gray-500 text-white font-bold rounded-lg transition-all hover:scale-105" style="font-family: 'Orbitron', sans-serif;">MAIN MENU</button>
             </div>
         </div>
@@ -217,7 +221,7 @@
             <p id="survival-wave" class="text-2xl text-white mb-6" style="font-family: 'Orbitron', sans-serif;"></p>
             <div class="flex gap-4">
                 <button id="btn-survival-retry" class="px-8 py-3 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-lg transition-all hover:scale-105" style="font-family: 'Orbitron', sans-serif;">RETRY</button>
-                <button id="btn-match-menu" class="px-8 py-3 bg-gray-600 hover:bg-gray-500 text-white font-bold rounded-lg transition-all hover:scale-105" style="font-family: 'Orbitron', sans-serif;">MAIN MENU</button>
+                <button id="btn-survival-menu" class="px-8 py-3 bg-gray-600 hover:bg-gray-500 text-white font-bold rounded-lg transition-all hover:scale-105" style="font-family: 'Orbitron', sans-serif;">MAIN MENU</button>
             </div>
         </div>
 

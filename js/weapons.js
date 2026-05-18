@@ -1,3 +1,5 @@
+import { LEFT_WALL, RIGHT_WALL } from './constants.js';
+
 export class Bullet {
     constructor(x, y, vx, vy, ownerColor, damage = 15, owner = null, type = 'normal') {
         this.x = x;

@@ -1,35 +1,265 @@
-export const GRAVITY = 0.55;
-export const GRAVITY_HOLD_REDUCTION = 0.45;
-export const MAX_FALL_SPEED = 18;
-export const ACCELERATION = 0.85;
-export const DECELERATION = 0.78;
-export const AIR_ACCELERATION = 0.45;
-export const FRICTION_GROUND = 0.82;
-export const FRICTION_AIR = 0.97;
-export const WALL_SLIDE_SPEED = 2.0;
-export const WALL_JUMP_FORCE_X = 10;
-export const WALL_JUMP_FORCE_Y = -13;
-export const FLOOR_Y = 580;
-export const LEFT_WALL = 40;
-export const RIGHT_WALL = 1240;
-export const CANVAS_WIDTH = 1280;
-export const CANVAS_HEIGHT = 640;
-export const KNOCKBACK_DAMAGE_SCALING = 0.018;
-export const KNOCKBACK_BASE = 1.0;
-export const HITSTUN_PER_DAMAGE = 0.6;
-export const MIN_HITSTUN = 8;
-export const MAX_HITSTUN = 45;
+// ============================================================
+// Physics Engine — PhysicsBody class + collision resolution
+// All positions in pixels, velocities in px/frame, forces in px/frame²
+// ============================================================
+import {
+    GRAVITY, MAX_FALL_SPEED, GROUND_FRICTION, AIR_DRAG,
+    LEFT_WALL, RIGHT_WALL, FLOOR_Y, KILL_Y,
+    RESTITUTION_GROUND, RESTITUTION_WALL,
+    WALL_BOUNCE_X, WALL_BOUNCE_Y, GROUND_BOUNCE_Y,
+    PLAYER_HALF_WIDTH, PLAYER_HEIGHT,
+    CANVAS_WIDTH, CANVAS_HEIGHT
+} from './constants.js';
 
+// Re-export constants for convenience (used by main.js, stages.js)
+export { FLOOR_Y, LEFT_WALL, RIGHT_WALL, KILL_Y, CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_HALF_WIDTH, PLAYER_HEIGHT };
+
+/**
+ * PhysicsBody — a single rigid body with position, velocity, mass
+ * Used for players, limbs, thrown weapons, and particles.
+ */
+export class PhysicsBody {
+    constructor(x, y, width, height, mass = 1.0) {
+        this.x = x; // center x (pixels)
+        this.y = y; // center y (pixels, increases downward)
+        this.vx = 0; // horizontal velocity (px/frame)
+        this.vy = 0; // vertical velocity (px/frame)
+        this.ax = 0; // horizontal acceleration (px/frame², reset each frame)
+        this.ay = 0; // vertical acceleration
+        this.mass = mass; // mass in arbitrary units (affects impulse response)
+        this.width = width; // collision box width
+        this.height = height; // collision box height
+        this.onGround = false;
+        this.friction = GROUND_FRICTION;
+        this.invulnerable = false;
+    }
+
+    /**
+     * Apply a continuous force (added to acceleration, integrated next update)
+     * @param {number} fx — force in x (px/frame²)
+     * @param {number} fy — force in y (px/frame²)
+     */
+    applyForce(fx, fy) {
+        this.ax += fx / this.mass;
+        this.ay += fy / this.mass;
+    }
+
+    /**
+     * Apply an instant impulse (direct velocity change)
+     * @param {number} ix — impulse in x (px/frame)
+     * @param {number} iy — impulse in y (px/frame)
+     */
+    applyImpulse(ix, iy) {
+        this.vx += ix / this.mass;
+        this.vy += iy / this.mass;
+    }
+
+    /**
+     * Integrate physics for one frame:
+     * 1. Add gravity to vertical acceleration
+     * 2. Integrate velocity → position
+     * 3. Apply friction/drag
+     * 4. Clamp terminal velocity
+     * 5. Reset accelerations
+     */
+    update() {
+        // Gravity
+        this.ay += GRAVITY;
+
+        // Integrate velocity
+        this.vx += this.ax;
+        this.vy += this.ay;
+
+        // Terminal velocity cap
+        if (this.vy > MAX_FALL_SPEED) this.vy = MAX_FALL_SPEED;
+        if (this.vy < -MAX_FALL_SPEED) this.vy = -MAX_FALL_SPEED;
+
+        // Integrate position
+        this.x += this.vx;
+        this.y += this.vy;
+
+        // Friction / drag
+        if (this.onGround) {
+            this.vx *= this.friction;
+        } else {
+            this.vx *= AIR_DRAG;
+        }
+
+        // Reset accelerations for next frame
+        this.ax = 0;
+        this.ay = 0;
+    }
+
+    /** AABB collision box (top-left corner) */
+    getBounds() {
+        return {
+            left: this.x - this.width / 2,
+            right: this.x + this.width / 2,
+            top: this.y - this.height,
+            bottom: this.y
+        };
+    }
+
+    /** Check overlap with another PhysicsBody */
+    overlaps(other) {
+        const a = this.getBounds();
+        const b = other.getBounds();
+        return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    }
+}
+
+/**
+ * Resolve player vs floor collision.
+ * Sets onGround, zeroes vy, applies restitution bounce.
+ * @param {PhysicsBody} body
+ * @param {number} floorY — y coordinate of floor surface
+ * @returns {boolean} true if collision occurred
+ */
+export function resolveFloor(body, floorY = FLOOR_Y) {
+    const wasAirborne = !body.onGround;
+    if (body.y >= floorY) {
+        body.y = floorY;
+        if (body.vy > 2) {
+            body.vy *= -RESTITUTION_GROUND;
+            if (Math.abs(body.vy) < 0.5) body.vy = 0;
+        } else {
+            body.vy = 0;
+        }
+        body.onGround = true;
+        return true;
+    }
+    body.onGround = false;
+    return false;
+}
+
+/**
+ * Resolve player vs wall boundaries.
+ * Bounces with restitution, clamps position.
+ * @param {PhysicsBody} body
+ * @returns {object} { bounced: boolean, dir: -1|1|0 }
+ */
+export function resolveWalls(body) {
+    let bounced = false;
+    let dir = 0;
+    if (body.x - body.width / 2 < LEFT_WALL) {
+        body.x = LEFT_WALL + body.width / 2;
+        body.vx *= WALL_BOUNCE_X;
+        body.vy *= WALL_BOUNCE_Y;
+        bounced = true;
+        dir = 1;
+    }
+    if (body.x + body.width / 2 > RIGHT_WALL) {
+        body.x = RIGHT_WALL - body.width / 2;
+        body.vx *= WALL_BOUNCE_X;
+        body.vy *= WALL_BOUNCE_Y;
+        bounced = true;
+        dir = -1;
+    }
+    return { bounced, dir };
+}
+
+/**
+ * Resolve player vs platform collisions.
+ * Supports solid and passthrough platforms.
+ * @param {PhysicsBody} body
+ * @param {Array} platforms — [{ x, y, width, height, type }]
+ * @returns {boolean} true if landed on any platform
+ */
+export function resolvePlatforms(body, platforms) {
+    let landed = false;
+    for (const plat of platforms) {
+        const b = body.getBounds();
+        // Horizontal overlap check
+        if (b.right <= plat.x || b.left >= plat.x + plat.width) continue;
+
+        if (plat.type === 'passthrough') {
+            // Only collide when falling through from above
+            if (body.vy <= 0) continue;
+            const prevBottom = body.y - body.vy;
+            if (prevBottom > plat.y) continue; // already below
+            if (b.bottom < plat.y) continue; // not yet reached
+            body.y = plat.y;
+            body.vy = 0;
+            body.onGround = true;
+            landed = true;
+            // Add moving platform velocity
+            if (plat.vx) body.x += plat.vx;
+        } else {
+            // Solid platform — one-way from top
+            if (body.vy >= 0) {
+                const prevBottom = body.y - body.vy;
+                if (b.bottom >= plat.y && prevBottom <= plat.y + 4) {
+                    body.y = plat.y;
+                    if (body.vy > 2) body.vy *= -RESTITUTION_GROUND;
+                    else body.vy = 0;
+                    body.onGround = true;
+                    landed = true;
+                    if (plat.vx) body.x += plat.vx;
+                }
+            }
+        }
+    }
+    return landed;
+}
+
+/**
+ * Resolve overlap between two PhysicsBody objects.
+ * Pushes them apart proportional to mass.
+ * @param {PhysicsBody} a
+ * @param {PhysicsBody} b
+ */
+export function resolveBodyOverlap(a, b) {
+    const ab = a.getBounds();
+    const bb = b.getBounds();
+    const overlapX = Math.min(ab.right - bb.left, bb.right - ab.left);
+    const overlapY = Math.min(ab.bottom - bb.top, bb.bottom - ab.top);
+    if (overlapX <= 0 || overlapY <= 0) return;
+
+    const totalMass = a.mass + b.mass;
+    const ratioA = b.mass / totalMass;
+    const ratioB = a.mass / totalMass;
+
+    if (overlapX < overlapY) {
+        const sign = (a.x < b.x) ? -1 : 1;
+        a.x += overlapX * ratioA * sign;
+        b.x -= overlapX * ratioB * sign;
+        // Share horizontal velocity
+        const avgVx = (a.vx * a.mass + b.vx * b.mass) / totalMass;
+        a.vx = avgVx * 0.8;
+        b.vx = avgVx * 0.8;
+    } else {
+        const sign = (a.y < b.y) ? -1 : 1;
+        a.y += overlapY * ratioA * sign;
+        b.y -= overlapY * ratioB * sign;
+    }
+}
+
+/**
+ * AABB overlap test for hitboxes (plain objects with x,y,w,h)
+ * @param {object} a — { x, y, w, h }
+ * @param {object} b — { x, y, w, h }
+ * @returns {boolean}
+ */
+export function checkHitboxOverlap(a, b) {
+    if (!a || !b) return false;
+    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+/**
+ * Generate stage platforms for a given stage type.
+ * @param {string} stageId
+ * @param {number} frameCount — for moving platform animation
+ * @returns {Array} platform objects
+ */
 export function getStagePlatforms(stageId, frameCount) {
     const base = [
         { x: 150, y: 450, width: 160, height: 14, type: 'solid' },
         { x: 970, y: 450, width: 160, height: 14, type: 'solid' },
         { x: 560, y: 340, width: 160, height: 14, type: 'solid' }
     ];
-
     if (stageId === 'neon_city') {
         const oscX = Math.sin(frameCount * 0.015) * 80;
-        base.push({ x: 400 + oscX, y: 380, width: 120, height: 12, type: 'moving' });
+        base.push({ x: 400 + oscX, y: 380, width: 120, height: 12, type: 'solid', vx: Math.cos(frameCount * 0.015) * 80 * 0.015 });
     } else if (stageId === 'blood_dojo') {
         base.push({ x: 300, y: 280, width: 140, height: 12, type: 'solid' });
         base.push({ x: 840, y: 280, width: 140, height: 12, type: 'solid' });
@@ -42,169 +272,27 @@ export function getStagePlatforms(stageId, frameCount) {
         base.push({ x: 1050, y: 350, width: 130, height: 12, type: 'solid' });
         base.push({ x: 530, y: 260, width: 220, height: 12, type: 'solid' });
     }
-
     return base;
 }
 
-export function applyGravity(player) {
-    const jumpHeld = player.jumpHeld && player.vy < 0;
-    const grav = jumpHeld ? GRAVITY * GRAVITY_HOLD_REDUCTION : GRAVITY;
-    player.vy += grav;
-    if (player.vy > MAX_FALL_SPEED) player.vy = MAX_FALL_SPEED;
-}
-
-export function applyHorizontalMovement(player, input) {
-    if (input.left) {
-        if (player.vx > 0) {
-            player.vx -= DECELERATION;
-            if (player.vx < 0) player.vx = 0;
-        } else {
-            player.vx -= player.onGround ? ACCELERATION : AIR_ACCELERATION;
-        }
-    } else if (input.right) {
-        if (player.vx < 0) {
-            player.vx += DECELERATION;
-            if (player.vx > 0) player.vx = 0;
-        } else {
-            player.vx += player.onGround ? ACCELERATION : AIR_ACCELERATION;
-        }
-    } else {
-        player.vx *= player.onGround ? FRICTION_GROUND : FRICTION_AIR;
-        if (Math.abs(player.vx) < 0.1) player.vx = 0;
-    }
-
-    const maxSpeed = player.speed || 5;
-    if (player.vx > maxSpeed) player.vx = maxSpeed;
-    if (player.vx < -maxSpeed) player.vx = -maxSpeed;
-}
-
-export function applyFriction(player) {
-    const friction = player.onGround ? FRICTION_GROUND : FRICTION_AIR;
-    player.vx *= friction;
-}
-
-export function handleWallSlide(player) {
-    if (!player.onGround && player.vy > 0) {
-        const atLeftWall = player.x <= LEFT_WALL + 5;
-        const atRightWall = player.x >= RIGHT_WALL - 5;
-        if ((atLeftWall && player.vx < 0) || (atRightWall && player.vx > 0)) {
-            player.wallSliding = true;
-            player.wallSlideDir = atLeftWall ? -1 : 1;
-            if (player.vy > WALL_SLIDE_SPEED) player.vy = WALL_SLIDE_SPEED;
-            return true;
-        }
-    }
-    player.wallSliding = false;
-    player.wallSlideDir = 0;
-    return false;
-}
-
-export function tryWallJump(player) {
-    if (player.wallSliding) {
-        player.vx = -player.wallSlideDir * WALL_JUMP_FORCE_X;
-        player.vy = WALL_JUMP_FORCE_Y;
-        player.onGround = false;
-        player.wallSliding = false;
-        player.wallJumpCooldown = 10;
-        return true;
-    }
-    return false;
-}
-
-export function resolveFloorCollision(player, floorY = FLOOR_Y) {
-    const wasAirborne = !player.onGround;
-    if (player.y >= floorY) {
-        player.y = floorY;
-        if (player.vy > 3 && wasAirborne) {
-            player.justLanded = true;
-            player.landingImpact = player.vy;
-        }
-        player.vy = 0;
-        player.onGround = true;
-        player.wallSliding = false;
-    }
-}
-
-export function resolveWallCollision(player) {
-    if (player.x < LEFT_WALL) {
-        player.x = LEFT_WALL;
-        player.vx = 0;
-    }
-    if (player.x > RIGHT_WALL) {
-        player.x = RIGHT_WALL;
-        player.vx = 0;
-    }
-}
-
-export function resolvePlatformCollision(player, plats) {
-    for (const platform of plats) {
-        if (platform.type === 'hazard') continue;
-        if (player.vy >= 0) {
-            const playerBottom = player.y;
-            const prevBottom = player.y - player.vy;
-            if (
-                player.x + 18 > platform.x &&
-                player.x - 18 < platform.x + platform.width &&
-                playerBottom >= platform.y &&
-                prevBottom <= platform.y + 8
-            ) {
-                const wasAirborne = !player.onGround;
-                player.y = platform.y;
-                if (player.vy > 3 && wasAirborne) {
-                    player.justLanded = true;
-                    player.landingImpact = player.vy;
-                }
-                player.vy = 0;
-                player.onGround = true;
-                player.wallSliding = false;
-                if (platform.type === 'moving' && platform.vx) {
-                    player.x += platform.vx;
-                }
-            }
-        }
-    }
-}
-
+/**
+ * Resolve player vs player collision (push apart horizontally).
+ * @param {object} p1 — player with x, width
+ * @param {object} p2 — player with x, width
+ */
 export function resolvePlayerCollision(p1, p2) {
-    const dx = p2.x - p1.x;
-    const dy = p2.y - p1.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    const minDistance = 36;
-    if (distance < minDistance && distance > 0) {
-        const overlap = minDistance - distance;
-        const pushDirX = dx / distance;
-        const pushDirY = dy / distance;
-        p1.x -= overlap * 0.5 * pushDirX;
-        p2.x += overlap * 0.5 * pushDirX;
-        if (Math.abs(dy) < 30) {
-            p1.y -= overlap * 0.25 * pushDirY;
-            p2.y += overlap * 0.25 * pushDirY;
+    const halfW = (p1.width || PLAYER_HALF_WIDTH * 2) / 2;
+    const dist = Math.abs(p1.x - p2.x);
+    const minDist = halfW + (p2.width || PLAYER_HALF_WIDTH * 2) / 2;
+    if (dist < minDist) {
+        const overlap = minDist - dist;
+        const push = overlap / 2;
+        if (p1.x < p2.x) {
+            p1.x -= push;
+            p2.x += push;
+        } else {
+            p1.x += push;
+            p2.x -= push;
         }
     }
-}
-
-export function checkHitboxOverlap(boxA, boxB) {
-    if (!boxA || !boxB) return false;
-    return (
-        boxA.x < boxB.x + boxB.w &&
-        boxA.x + boxA.w > boxB.x &&
-        boxA.y < boxB.y + boxB.h &&
-        boxA.y + boxA.h > boxB.y
-    );
-}
-
-export function calculateKnockback(damagePercent, baseKnockbackX, baseKnockbackY, attackerDir, targetWeight = 1.0, isHeavy = false) {
-    const scaling = 1 + (damagePercent * KNOCKBACK_DAMAGE_SCALING);
-    const heavyMult = isHeavy ? 1.6 : 1.0;
-    const kb = (KNOCKBACK_BASE + baseKnockbackX * scaling * heavyMult) / targetWeight;
-    const kbY = -(baseKnockbackY * scaling * heavyMult * 0.5 + 2);
-    return {
-        vx: kb * attackerDir,
-        vy: kbY
-    };
-}
-
-export function calculateHitstun(damage) {
-    const stun = Math.round(damage * HITSTUN_PER_DAMAGE);
-    return Math.max(MIN_HITSTUN, Math.min(MAX_HITSTUN, stun));
 }
