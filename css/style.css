@@ -79,6 +79,11 @@ body {
     min-width: 200px;
 }
 
+.mode-btn {
+    font-family: 'Orbitron', sans-serif;
+    letter-spacing: 0.05em;
+}
+
 @keyframes slam-in {
     0% {
         transform: scale(3);

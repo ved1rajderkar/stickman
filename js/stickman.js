@@ -2,39 +2,40 @@ export class StickMan {
     constructor(color, glowColor) {
         this.color = color;
         this.glowColor = glowColor;
-
         this.leftArmAngle = 0;
         this.rightArmAngle = 0;
         this.leftLegAngle = 0;
         this.rightLegAngle = 0;
         this.torsoLean = 0;
         this.headBob = 0;
-
         this.leftArmAngleVel = 0;
         this.rightArmAngleVel = 0;
         this.leftLegAngleVel = 0;
         this.rightLegAngleVel = 0;
         this.torsoLeanVel = 0;
         this.headBobVel = 0;
-
         this.leftArmTarget = 0;
         this.rightArmTarget = 0;
         this.leftLegTarget = 0;
         this.rightLegTarget = 0;
         this.torsoTarget = 0;
         this.headTarget = 0;
-
         this.stiffness = 0.2;
         this.damping = 0.8;
-
         this.breathCycle = 0;
         this.currentAnim = 'IDLE';
+        this.accessory = null;
+        this.skinStyle = 'classic';
+        this.trailPoints = [];
     }
 
     setColor(color, glowColor) {
         this.color = color;
         this.glowColor = glowColor;
     }
+
+    setAccessory(type) { this.accessory = type; }
+    setSkinStyle(style) { this.skinStyle = style; }
 
     springAngle(current, target, velocity, stiffness, damping) {
         const force = (target - current) * stiffness;
@@ -46,55 +47,43 @@ export class StickMan {
 
     update() {
         this.breathCycle += 0.05;
-
         let s = this.stiffness;
         let d = this.damping;
 
-        if (this.currentAnim === 'IDLE') {
-            s = 0.04; d = 0.85;
-        } else if (this.currentAnim === 'WALK') {
-            s = 0.12; d = 0.78;
-        } else if (this.currentAnim === 'JUMP') {
-            s = 0.20; d = 0.70;
-        } else if (this.currentAnim === 'FALL') {
-            s = 0.15; d = 0.75;
-        } else if (this.currentAnim === 'ATTACK_LIGHT') {
-            s = 0.95; d = 0.60;
-        } else if (this.currentAnim === 'ATTACK_HEAVY') {
-            s = 1.0; d = 0.50;
-        } else if (this.currentAnim === 'BLOCK') {
-            s = 0.15; d = 0.80;
-        } else if (this.currentAnim === 'HIT') {
-            s = 0.90; d = 0.55;
-        } else if (this.currentAnim === 'DEATH') {
-            s = 0.02; d = 0.92;
-        } else if (this.currentAnim === 'SPECIAL') {
-            s = 0.8; d = 0.55;
-        }
+        const animSettings = {
+            IDLE: { s: 0.04, d: 0.85 },
+            WALK: { s: 0.12, d: 0.78 },
+            JUMP: { s: 0.20, d: 0.70 },
+            FALL: { s: 0.15, d: 0.75 },
+            WALL_SLIDE: { s: 0.18, d: 0.72 },
+            ATTACK_LIGHT: { s: 0.95, d: 0.60 },
+            ATTACK_HEAVY: { s: 1.0, d: 0.50 },
+            BLOCK: { s: 0.15, d: 0.80 },
+            PARRY: { s: 0.90, d: 0.55 },
+            HIT: { s: 0.90, d: 0.55 },
+            DEATH: { s: 0.02, d: 0.92 },
+            SPECIAL: { s: 0.8, d: 0.55 },
+            GRAB: { s: 0.7, d: 0.60 },
+            GRABBED: { s: 0.05, d: 0.90 },
+            THROW: { s: 0.85, d: 0.55 }
+        };
+
+        const settings = animSettings[this.currentAnim] || animSettings.IDLE;
+        s = settings.s;
+        d = settings.d;
 
         const la = this.springAngle(this.leftArmAngle, this.leftArmTarget, this.leftArmAngleVel, s, d);
-        this.leftArmAngle = la.angle;
-        this.leftArmAngleVel = la.vel;
-
+        this.leftArmAngle = la.angle; this.leftArmAngleVel = la.vel;
         const ra = this.springAngle(this.rightArmAngle, this.rightArmTarget, this.rightArmAngleVel, s, d);
-        this.rightArmAngle = ra.angle;
-        this.rightArmAngleVel = ra.vel;
-
+        this.rightArmAngle = ra.angle; this.rightArmAngleVel = ra.vel;
         const ll = this.springAngle(this.leftLegAngle, this.leftLegTarget, this.leftLegAngleVel, s, d);
-        this.leftLegAngle = ll.angle;
-        this.leftLegAngleVel = ll.vel;
-
+        this.leftLegAngle = ll.angle; this.leftLegAngleVel = ll.vel;
         const rl = this.springAngle(this.rightLegAngle, this.rightLegTarget, this.rightLegAngleVel, s, d);
-        this.rightLegAngle = rl.angle;
-        this.rightLegAngleVel = rl.vel;
-
+        this.rightLegAngle = rl.angle; this.rightLegAngleVel = rl.vel;
         const tl = this.springAngle(this.torsoLean, this.torsoTarget, this.torsoLeanVel, s, d);
-        this.torsoLean = tl.angle;
-        this.torsoLeanVel = tl.vel;
-
+        this.torsoLean = tl.angle; this.torsoLeanVel = tl.vel;
         const hb = this.springAngle(this.headBob, this.headTarget, this.headBobVel, s, d);
-        this.headBob = hb.angle;
-        this.headBobVel = hb.vel;
+        this.headBob = hb.angle; this.headBobVel = hb.vel;
     }
 
     applyHitImpulse(attackerFacingDir, damage) {
@@ -106,84 +95,6 @@ export class StickMan {
         this.rightLegAngleVel -= (damage / 25);
     }
 
-    setAnimation(animName, facingDir = 1, frame = 0, weaponName = 'Fists', isHeavy = false) {
-        this.currentAnim = animName;
-
-        const animations = {
-            IDLE: {
-                leftArmAngle: 0.3 + Math.sin(this.breathCycle) * 0.05,
-                rightArmAngle: -0.3 - Math.sin(this.breathCycle) * 0.05,
-                leftLegAngle: 0.1,
-                rightLegAngle: -0.1,
-                torsoLean: 0,
-                headBob: Math.sin(this.breathCycle) * 2
-            },
-            WALK: {
-                leftArmAngle: Math.sin(frame * 0.3) * 0.5,
-                rightArmAngle: -Math.sin(frame * 0.3) * 0.5,
-                leftLegAngle: -Math.sin(frame * 0.3) * 0.4,
-                rightLegAngle: Math.sin(frame * 0.3) * 0.4,
-                torsoLean: 0.05 * facingDir,
-                headBob: Math.abs(Math.sin(frame * 0.3)) * 3
-            },
-            JUMP: {
-                leftArmAngle: -0.8,
-                rightArmAngle: 0.8,
-                leftLegAngle: -0.4,
-                rightLegAngle: 0.4,
-                torsoLean: 0,
-                headBob: 0
-            },
-            FALL: {
-                leftArmAngle: Math.sin(frame * 0.2) * 1.2,
-                rightArmAngle: -Math.sin(frame * 0.2) * 1.2,
-                leftLegAngle: 0.3,
-                rightLegAngle: -0.3,
-                torsoLean: -0.1 * facingDir,
-                headBob: 0
-            },
-            BLOCK: {
-                leftArmAngle: facingDir === 1 ? -0.8 : 0.8,
-                rightArmAngle: facingDir === 1 ? 0.8 : -0.8,
-                leftLegAngle: 0.2,
-                rightLegAngle: -0.2,
-                torsoLean: -0.1 * facingDir,
-                headBob: -2
-            },
-            HIT: {
-                leftArmAngle: 0.5,
-                rightArmAngle: -0.5,
-                leftLegAngle: 0.1,
-                rightLegAngle: -0.1,
-                torsoLean: -0.2 * facingDir,
-                headBob: 3
-            },
-            DEATH: {
-                leftArmAngle: 1.2 + frame * 0.1,
-                rightArmAngle: -1.2 - frame * 0.1,
-                leftLegAngle: 0.5 + frame * 0.05,
-                rightLegAngle: -0.5 - frame * 0.05,
-                torsoLean: -0.3 * facingDir,
-                headBob: 5
-            }
-        };
-
-        if (animName === 'ATTACK_LIGHT' || animName === 'ATTACK_HEAVY') {
-            this.setAttackAnimation(animName, facingDir, frame, weaponName, isHeavy);
-        } else if (animName === 'SPECIAL') {
-            this.setTargets({
-                leftArmAngle: -1.5 + Math.sin(frame * 0.4) * 0.5,
-                rightArmAngle: 1.5 - Math.sin(frame * 0.4) * 0.5,
-                leftLegAngle: -0.3,
-                rightLegAngle: 0.3,
-                torsoLean: 0.2 * facingDir,
-                headBob: Math.sin(frame * 0.4) * 4
-            });
-        } else {
-            this.setTargets(animations[animName] || animations.IDLE);
-        }
-    }
-
     setTargets(t) {
         this.leftArmTarget = t.leftArmAngle;
         this.rightArmTarget = t.rightArmAngle;
@@ -193,332 +104,146 @@ export class StickMan {
         this.headTarget = t.headBob;
     }
 
-    setAttackAnimation(animName, facingDir, frame, weaponName, isHeavy) {
+    setAnimation(animName, facingDir = 1, frame = 0, weaponName = 'Fists', isHeavy = false) {
+        this.currentAnim = animName;
         const fd = facingDir;
-        const isLight = animName === 'ATTACK_LIGHT';
 
-        if (weaponName === 'Fists') {
-            if (isLight) {
-                if (frame <= 4) {
-                    const t = frame / 4;
-                    this.setTargets({
-                        leftArmAngle: fd === 1 ? 0.3 - t * 0.7 : -0.3 + t * 0.7,
-                        rightArmAngle: fd === 1 ? -0.3 - t * 0.7 : 0.3 + t * 0.7,
-                        leftLegAngle: 0.1 + t * 0.05,
-                        rightLegAngle: -0.1 - t * 0.05,
-                        torsoLean: -0.1 * fd * t,
-                        headBob: -2 * t
-                    });
-                } else if (frame <= 9) {
-                    const t = (frame - 4) / 5;
-                    this.setTargets({
-                        leftArmAngle: fd === 1 ? -0.4 + t * 0.7 : 0.4 - t * 0.7,
-                        rightArmAngle: fd === 1 ? -1.0 + t * 1.3 : 1.0 - t * 1.3,
-                        leftLegAngle: 0.15 - t * 0.1,
-                        rightLegAngle: -0.15 + t * 0.1,
-                        torsoLean: 0.15 * fd * t,
-                        headBob: -2 + t * 2
-                    });
-                } else {
-                    const t = (frame - 9) / 9;
-                    this.setTargets({
-                        leftArmAngle: 0.3 * (1 - t) + (fd === 1 ? -0.4 : 0.4) * t,
-                        rightArmAngle: -0.3 * (1 - t) + (fd === 1 ? -1.0 : 1.0) * t,
-                        leftLegAngle: 0.05 * (1 - t) + 0.1 * t,
-                        rightLegAngle: -0.05 * (1 - t) - 0.1 * t,
-                        torsoLean: 0.15 * fd * (1 - t),
-                        headBob: 0
-                    });
-                }
-            } else {
-                if (frame <= 8) {
-                    const t = frame / 8;
-                    this.setTargets({
-                        leftArmAngle: fd === 1 ? 0.3 - t * 0.5 : -0.3 + t * 0.5,
-                        rightArmAngle: fd === 1 ? -0.3 - t * 1.0 : 0.3 + t * 1.0,
-                        leftLegAngle: 0.1 + t * 0.15,
-                        rightLegAngle: -0.1 - t * 0.15,
-                        torsoLean: -0.25 * fd * t,
-                        headBob: -5 * t
-                    });
-                } else if (frame <= 14) {
-                    const t = (frame - 8) / 6;
-                    this.setTargets({
-                        leftArmAngle: fd === 1 ? -0.2 + t * 0.5 : 0.2 - t * 0.5,
-                        rightArmAngle: fd === 1 ? -1.3 + t * 1.8 : 1.3 - t * 1.8,
-                        leftLegAngle: 0.25 - t * 0.15,
-                        rightLegAngle: -0.25 + t * 0.15,
-                        torsoLean: 0.35 * fd * t,
-                        headBob: -5 + t * 8
-                    });
-                } else {
-                    const t = (frame - 14) / 14;
-                    this.setTargets({
-                        leftArmAngle: 0.3 * (1 - t) + (fd === 1 ? -0.2 : 0.2) * t,
-                        rightArmAngle: -0.3 * (1 - t) + (fd === 1 ? -1.3 : 1.3) * t,
-                        leftLegAngle: 0.1 * (1 - t) + 0.1 * t,
-                        rightLegAngle: -0.1 * (1 - t) - 0.1 * t,
-                        torsoLean: 0.35 * fd * (1 - t),
-                        headBob: 3 * (1 - t)
-                    });
-                }
+        const animations = {
+            IDLE: {
+                leftArmAngle: 0.3 + Math.sin(this.breathCycle) * 0.05,
+                rightArmAngle: -0.3 - Math.sin(this.breathCycle) * 0.05,
+                leftLegAngle: 0.1, rightLegAngle: -0.1,
+                torsoLean: 0, headBob: Math.sin(this.breathCycle) * 2
+            },
+            WALK: {
+                leftArmAngle: Math.sin(frame * 0.3) * 0.5,
+                rightArmAngle: -Math.sin(frame * 0.3) * 0.5,
+                leftLegAngle: -Math.sin(frame * 0.3) * 0.4,
+                rightLegAngle: Math.sin(frame * 0.3) * 0.4,
+                torsoLean: 0.05 * fd, headBob: Math.abs(Math.sin(frame * 0.3)) * 3
+            },
+            JUMP: {
+                leftArmAngle: -0.8, rightArmAngle: 0.8,
+                leftLegAngle: -0.4, rightLegAngle: 0.4,
+                torsoLean: 0, headBob: 0
+            },
+            FALL: {
+                leftArmAngle: Math.sin(frame * 0.2) * 1.2,
+                rightArmAngle: -Math.sin(frame * 0.2) * 1.2,
+                leftLegAngle: 0.3, rightLegAngle: -0.3,
+                torsoLean: -0.1 * fd, headBob: 0
+            },
+            WALL_SLIDE: {
+                leftArmAngle: fd === 1 ? -1.0 : 0.5,
+                rightArmAngle: fd === 1 ? 0.5 : -1.0,
+                leftLegAngle: 0.2, rightLegAngle: -0.2,
+                torsoLean: -0.15 * fd, headBob: Math.sin(frame * 0.1) * 2
+            },
+            BLOCK: {
+                leftArmAngle: fd === 1 ? -0.8 : 0.8,
+                rightArmAngle: fd === 1 ? 0.8 : -0.8,
+                leftLegAngle: 0.2, rightLegAngle: -0.2,
+                torsoLean: -0.1 * fd, headBob: -2
+            },
+            PARRY: {
+                leftArmAngle: fd === 1 ? -1.2 : 1.0,
+                rightArmAngle: fd === 1 ? 1.0 : -1.2,
+                leftLegAngle: 0.3, rightLegAngle: -0.3,
+                torsoLean: 0.1 * fd, headBob: -3
+            },
+            HIT: {
+                leftArmAngle: 0.5, rightArmAngle: -0.5,
+                leftLegAngle: 0.1, rightLegAngle: -0.1,
+                torsoLean: -0.2 * fd, headBob: 3
+            },
+            DEATH: {
+                leftArmAngle: 1.2 + frame * 0.1,
+                rightArmAngle: -1.2 - frame * 0.1,
+                leftLegAngle: 0.5 + frame * 0.05,
+                rightLegAngle: -0.5 - frame * 0.05,
+                torsoLean: -0.3 * fd, headBob: 5
+            },
+            GRAB: {
+                leftArmAngle: fd === 1 ? -1.0 : 0.8,
+                rightArmAngle: fd === 1 ? -1.2 : 1.0,
+                leftLegAngle: 0.2, rightLegAngle: -0.2,
+                torsoLean: 0.15 * fd, headBob: -2
+            },
+            GRABBED: {
+                leftArmAngle: Math.sin(frame * 0.15) * 0.8,
+                rightArmAngle: Math.sin(frame * 0.15 + 1) * 0.8,
+                leftLegAngle: 0.4, rightLegAngle: -0.4,
+                torsoLean: 0, headBob: Math.sin(frame * 0.2) * 4
+            },
+            THROW: {
+                leftArmAngle: fd === 1 ? -0.5 : 0.3,
+                rightArmAngle: fd === 1 ? -1.5 + frame * 0.1 : 1.5 - frame * 0.1,
+                leftLegAngle: 0.3, rightLegAngle: -0.3,
+                torsoLean: 0.2 * fd, headBob: -2
             }
-        } else if (weaponName === 'Katana') {
-            if (isLight) {
-                if (frame <= 4) {
-                    const t = frame / 4;
-                    this.setTargets({
-                        rightArmAngle: -0.3 - t * 1.2,
-                        leftArmAngle: 0.3 + t * 0.3,
-                        leftLegAngle: 0.1 + t * 0.1,
-                        rightLegAngle: -0.1 - t * 0.1,
-                        torsoLean: -0.15 * fd * t,
-                        headBob: -3 * t
-                    });
-                } else if (frame <= 10) {
-                    const t = (frame - 4) / 6;
-                    this.setTargets({
-                        rightArmAngle: -1.5 + t * 2.1,
-                        leftArmAngle: 0.6 - t * 0.3,
-                        leftLegAngle: 0.2 - t * 0.1,
-                        rightLegAngle: -0.2 + t * 0.1,
-                        torsoLean: 0.2 * fd * t,
-                        headBob: -3 + t * 3
-                    });
-                } else {
-                    const t = (frame - 10) / 6;
-                    this.setTargets({
-                        rightArmAngle: 0.6 * (1 - t) - 0.3 * t,
-                        leftArmAngle: 0.3 * (1 - t) + 0.3 * t,
-                        leftLegAngle: 0.1 * (1 - t) + 0.1 * t,
-                        rightLegAngle: -0.1 * (1 - t) - 0.1 * t,
-                        torsoLean: 0.2 * fd * (1 - t),
-                        headBob: 0
-                    });
-                }
-            } else {
-                if (frame <= 7) {
-                    const t = frame / 7;
-                    this.setTargets({
-                        rightArmAngle: -0.3 - t * 1.5,
-                        leftArmAngle: 0.3 + t * 0.5,
-                        leftLegAngle: 0.1 + t * 0.2,
-                        rightLegAngle: -0.1 - t * 0.2,
-                        torsoLean: -0.25 * fd * t,
-                        headBob: -5 * t
-                    });
-                } else if (frame <= 15) {
-                    const t = (frame - 7) / 8;
-                    this.setTargets({
-                        rightArmAngle: -1.8 + t * 2.8,
-                        leftArmAngle: 0.8 - t * 0.5,
-                        leftLegAngle: 0.3 - t * 0.2,
-                        rightLegAngle: -0.3 + t * 0.2,
-                        torsoLean: 0.3 * fd * t,
-                        headBob: -5 + t * 5
-                    });
-                } else {
-                    const t = (frame - 15) / 9;
-                    this.setTargets({
-                        rightArmAngle: 1.0 * (1 - t) - 0.3 * t,
-                        leftArmAngle: 0.3 * (1 - t) + 0.3 * t,
-                        leftLegAngle: 0.1 * (1 - t) + 0.1 * t,
-                        rightLegAngle: -0.1 * (1 - t) - 0.1 * t,
-                        torsoLean: 0.3 * fd * (1 - t),
-                        headBob: 0
-                    });
-                }
-            }
-        } else if (weaponName === 'Baseball Bat') {
-            if (isLight) {
-                if (frame <= 5) {
-                    const t = frame / 5;
-                    this.setTargets({
-                        rightArmAngle: -0.3 - t * 1.4,
-                        leftArmAngle: 0.3 + t * 0.4,
-                        leftLegAngle: 0.1 + t * 0.15,
-                        rightLegAngle: -0.1 - t * 0.15,
-                        torsoLean: -0.2 * fd * t,
-                        headBob: -4 * t
-                    });
-                } else if (frame <= 11) {
-                    const t = (frame - 5) / 6;
-                    this.setTargets({
-                        rightArmAngle: -1.7 + t * 2.2,
-                        leftArmAngle: 0.7 - t * 0.4,
-                        leftLegAngle: 0.25 - t * 0.15,
-                        rightLegAngle: -0.25 + t * 0.15,
-                        torsoLean: 0.25 * fd * t,
-                        headBob: -4 + t * 4
-                    });
-                } else {
-                    const t = (frame - 11) / 7;
-                    this.setTargets({
-                        rightArmAngle: 0.5 * (1 - t) - 0.3 * t,
-                        leftArmAngle: 0.3 * (1 - t) + 0.3 * t,
-                        leftLegAngle: 0.1 * (1 - t) + 0.1 * t,
-                        rightLegAngle: -0.1 * (1 - t) - 0.1 * t,
-                        torsoLean: 0.25 * fd * (1 - t),
-                        headBob: 0
-                    });
-                }
-            } else {
-                if (frame <= 8) {
-                    const t = frame / 8;
-                    this.setTargets({
-                        rightArmAngle: -0.3 - t * 1.7,
-                        leftArmAngle: 0.3 + t * 0.5,
-                        leftLegAngle: 0.1 + t * 0.25,
-                        rightLegAngle: -0.1 - t * 0.25,
-                        torsoLean: -0.3 * fd * t,
-                        headBob: -6 * t
-                    });
-                } else if (frame <= 16) {
-                    const t = (frame - 8) / 8;
-                    this.setTargets({
-                        rightArmAngle: -2.0 + t * 3.0,
-                        leftArmAngle: 0.8 - t * 0.5,
-                        leftLegAngle: 0.35 - t * 0.25,
-                        rightLegAngle: -0.35 + t * 0.25,
-                        torsoLean: 0.35 * fd * t,
-                        headBob: -6 + t * 6
-                    });
-                } else {
-                    const t = (frame - 16) / 10;
-                    this.setTargets({
-                        rightArmAngle: 1.0 * (1 - t) - 0.3 * t,
-                        leftArmAngle: 0.3 * (1 - t) + 0.3 * t,
-                        leftLegAngle: 0.1 * (1 - t) + 0.1 * t,
-                        rightLegAngle: -0.1 * (1 - t) - 0.1 * t,
-                        torsoLean: 0.35 * fd * (1 - t),
-                        headBob: 0
-                    });
-                }
-            }
-        } else if (weaponName === 'Pistol') {
-            if (isLight) {
-                if (frame <= 2) {
-                    const t = frame / 2;
-                    this.setTargets({
-                        rightArmAngle: -0.3 - t * 0.5,
-                        leftArmAngle: 0.3 + t * 0.2,
-                        leftLegAngle: 0.1,
-                        rightLegAngle: -0.1,
-                        torsoLean: 0.05 * fd * t,
-                        headBob: -1 * t
-                    });
-                } else if (frame <= 6) {
-                    const t = (frame - 2) / 4;
-                    this.setTargets({
-                        rightArmAngle: -0.8 + t * 0.5,
-                        leftArmAngle: 0.5 - t * 0.2,
-                        leftLegAngle: 0.1,
-                        rightLegAngle: -0.1,
-                        torsoLean: 0.05 * fd,
-                        headBob: -1 + t
-                    });
-                } else {
-                    const t = (frame - 6) / 6;
-                    this.setTargets({
-                        rightArmAngle: -0.3 * (1 - t) - 0.3 * t,
-                        leftArmAngle: 0.3 * (1 - t) + 0.3 * t,
-                        leftLegAngle: 0.1,
-                        rightLegAngle: -0.1,
-                        torsoLean: 0.05 * fd * (1 - t),
-                        headBob: 0
-                    });
-                }
-            } else {
-                if (frame <= 3) {
-                    const t = frame / 3;
-                    this.setTargets({
-                        rightArmAngle: -0.3 - t * 0.6,
-                        leftArmAngle: 0.3 + t * 0.3,
-                        leftLegAngle: 0.1,
-                        rightLegAngle: -0.1,
-                        torsoLean: 0.08 * fd * t,
-                        headBob: -2 * t
-                    });
-                } else if (frame <= 8) {
-                    const t = (frame - 3) / 5;
-                    this.setTargets({
-                        rightArmAngle: -0.9 + t * 0.6,
-                        leftArmAngle: 0.6 - t * 0.3,
-                        leftLegAngle: 0.1,
-                        rightLegAngle: -0.1,
-                        torsoLean: 0.08 * fd,
-                        headBob: -2 + t * 2
-                    });
-                } else {
-                    const t = (frame - 8) / 8;
-                    this.setTargets({
-                        rightArmAngle: -0.3 * (1 - t) - 0.3 * t,
-                        leftArmAngle: 0.3 * (1 - t) + 0.3 * t,
-                        leftLegAngle: 0.1,
-                        rightLegAngle: -0.1,
-                        torsoLean: 0.08 * fd * (1 - t),
-                        headBob: 0
-                    });
-                }
-            }
-        } else {
+        };
+
+        if (animName === 'ATTACK_LIGHT' || animName === 'ATTACK_HEAVY') {
+            this.setAttackAnimation(animName, fd, frame, weaponName, isHeavy);
+        } else if (animName === 'SPECIAL') {
             this.setTargets({
-                leftArmAngle: fd === 1 ? -1.2 : 0.3,
-                rightArmAngle: fd === 1 ? 0.3 : -1.2,
-                leftLegAngle: 0.2,
-                rightLegAngle: -0.2,
-                torsoLean: 0.1 * fd,
-                headBob: 0
+                leftArmAngle: -1.5 + Math.sin(frame * 0.4) * 0.5,
+                rightArmAngle: 1.5 - Math.sin(frame * 0.4) * 0.5,
+                leftLegAngle: -0.3, rightLegAngle: 0.3,
+                torsoLean: 0.2 * fd, headBob: Math.sin(frame * 0.4) * 4
             });
+        } else {
+            this.setTargets(animations[animName] || animations.IDLE);
         }
     }
 
-    getBodyPartPositions(ctx, x, y, facingDir, scale = 1) {
-        const headRadius = 18;
-        const torsoLength = 45;
-        const armLength = 35;
-        const legLength = 40;
-
-        const headY = -torsoLength - headRadius + this.headBob;
-        const torsoTopY = -torsoLength + this.headBob;
-        const torsoBottomY = this.headBob;
-        const shoulderY = torsoTopY + 5;
-        const hipY = torsoBottomY;
-
-        const leftArmEndX = Math.cos(Math.PI / 2 + this.leftArmAngle) * armLength;
-        const leftArmEndY = shoulderY + Math.sin(Math.PI / 2 + this.leftArmAngle) * armLength;
-        const rightArmEndX = Math.cos(Math.PI / 2 + this.rightArmAngle) * armLength;
-        const rightArmEndY = shoulderY + Math.sin(Math.PI / 2 + this.rightArmAngle) * armLength;
-
-        const leftLegEndX = Math.cos(Math.PI / 2 + this.leftLegAngle) * legLength;
-        const leftLegEndY = hipY + Math.sin(Math.PI / 2 + this.leftLegAngle) * legLength;
-        const rightLegEndX = Math.cos(Math.PI / 2 + this.rightLegAngle) * legLength;
-        const rightLegEndY = hipY + Math.sin(Math.PI / 2 + this.rightLegAngle) * legLength;
-
-        const fd = facingDir;
-        const s = scale;
-        const cosLean = Math.cos(this.torsoLean);
-        const sinLean = Math.sin(this.torsoLean);
-
-        const transformPoint = (px, py) => {
-            const rx = px * cosLean - py * sinLean;
-            const ry = px * sinLean + py * cosLean;
-            return {
-                x: x + rx * fd * s,
-                y: y + ry * s
-            };
+    setAttackAnimation(animName, fd, frame, weaponName, isHeavy) {
+        const isLight = animName === 'ATTACK_LIGHT';
+        const weaponAttacks = {
+            Fists: {
+                light: [
+                    { f: 4, t: { leftArmAngle: fd===1?-0.4:0.4, rightArmAngle: fd===1?-1.0:1.0, leftLegAngle: 0.05, rightLegAngle: -0.05, torsoLean: 0.15*fd, headBob: 0 }},
+                    { f: 9, t: { leftArmAngle: 0.3, rightArmAngle: -0.3, leftLegAngle: 0.1, rightLegAngle: -0.1, torsoLean: 0, headBob: 0 }}
+                ],
+                heavy: [
+                    { f: 8, t: { leftArmAngle: fd===1?-0.2:0.2, rightArmAngle: fd===1?-1.3:1.3, leftLegAngle: 0.25, rightLegAngle: -0.25, torsoLean: 0.35*fd, headBob: -5 }},
+                    { f: 14, t: { leftArmAngle: 0.3, rightArmAngle: -0.3, leftLegAngle: 0.1, rightLegAngle: -0.1, torsoLean: 0, headBob: 3 }},
+                    { f: 24, t: { leftArmAngle: 0.3, rightArmAngle: -0.3, leftLegAngle: 0.1, rightLegAngle: -0.1, torsoLean: 0, headBob: 0 }}
+                ]
+            }
         };
 
-        return {
-            head: transformPoint(0, headY),
-            torso: transformPoint(0, torsoTopY + torsoLength / 2),
-            leftArm: transformPoint(leftArmEndX, leftArmEndY),
-            rightArm: transformPoint(rightArmEndX, rightArmEndY),
-            leftLeg: transformPoint(leftLegEndX, leftLegEndY),
-            rightLeg: transformPoint(rightLegEndX, rightLegEndY),
-            shoulder: transformPoint(0, shoulderY),
-            hip: transformPoint(0, hipY)
-        };
+        const wf = weaponAttacks[weaponName] || weaponAttacks.Fists;
+        const attacks = isLight ? wf.light : wf.heavy;
+
+        for (let i = attacks.length - 1; i >= 0; i--) {
+            if (frame >= attacks[i].f) {
+                this.setTargets(attacks[i].t);
+                return;
+            }
+        }
+
+        const first = attacks[0];
+        const t = frame / first.f;
+        const base = { leftArmAngle: fd===1?0.3:-0.3, rightArmAngle: fd===1?-0.3:0.3, leftLegAngle: 0.1, rightLegAngle: -0.1, torsoLean: 0, headBob: 0 };
+        const target = first.t;
+        this.setTargets({
+            leftArmAngle: base.leftArmAngle + (target.leftArmAngle - base.leftArmAngle) * t,
+            rightArmAngle: base.rightArmAngle + (target.rightArmAngle - base.rightArmAngle) * t,
+            leftLegAngle: base.leftLegAngle + (target.leftLegAngle - base.leftLegAngle) * t,
+            rightLegAngle: base.rightLegAngle + (target.rightLegAngle - base.rightLegAngle) * t,
+            torsoLean: base.torsoLean + (target.torsoLean - base.torsoLean) * t,
+            headBob: base.headBob + (target.headBob - base.headBob) * t
+        });
+    }
+
+    getBodyThickness() {
+        switch (this.skinStyle) {
+            case 'chunky': return 8;
+            case 'slim': return 3;
+            case 'robot': return 5;
+            default: return 5;
+        }
     }
 
     draw(ctx, x, y, facingDir = 1, scale = 1, weapon = null, player = null) {
@@ -526,17 +251,18 @@ export class StickMan {
         ctx.translate(x, y);
         ctx.scale(facingDir * scale, scale);
 
+        const thickness = this.getBodyThickness();
         ctx.strokeStyle = this.color;
         ctx.fillStyle = this.color;
         ctx.shadowColor = this.glowColor;
         ctx.shadowBlur = 15;
         ctx.lineCap = 'round';
-        ctx.lineWidth = 5;
+        ctx.lineWidth = thickness;
 
-        const headRadius = 18;
-        const torsoLength = 45;
-        const armLength = 35;
-        const legLength = 40;
+        const headRadius = this.skinStyle === 'chunky' ? 20 : this.skinStyle === 'slim' ? 15 : 18;
+        const torsoLength = this.skinStyle === 'chunky' ? 40 : this.skinStyle === 'slim' ? 50 : 45;
+        const armLength = this.skinStyle === 'chunky' ? 30 : this.skinStyle === 'slim' ? 38 : 35;
+        const legLength = this.skinStyle === 'chunky' ? 35 : this.skinStyle === 'slim' ? 44 : 40;
 
         const headY = -torsoLength - headRadius + this.headBob;
         const torsoTopY = -torsoLength + this.headBob;
@@ -545,14 +271,41 @@ export class StickMan {
         ctx.save();
         ctx.rotate(this.torsoLean);
 
-        ctx.beginPath();
-        ctx.arc(0, headY, headRadius, 0, Math.PI * 2);
-        ctx.fill();
+        if (this.skinStyle === 'robot') {
+            ctx.fillStyle = this.color;
+            ctx.fillRect(-8, headY - headRadius, 16, headRadius * 2);
+            ctx.fillStyle = '#ff0000';
+            ctx.fillRect(-4, headY - 4, 3, 3);
+            ctx.fillRect(2, headY - 4, 3, 3);
+        } else {
+            ctx.beginPath();
+            ctx.arc(0, headY, headRadius, 0, Math.PI * 2);
+            ctx.fill();
+        }
 
-        ctx.beginPath();
-        ctx.moveTo(0, torsoTopY);
-        ctx.lineTo(0, torsoBottomY);
-        ctx.stroke();
+        if (this.skinStyle === 'robot') {
+            ctx.strokeStyle = this.color;
+            ctx.lineWidth = thickness;
+            ctx.beginPath();
+            ctx.moveTo(0, torsoTopY);
+            ctx.lineTo(0, torsoBottomY);
+            ctx.stroke();
+            ctx.strokeStyle = '#888888';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(-6, torsoTopY + 10);
+            ctx.lineTo(6, torsoTopY + 10);
+            ctx.moveTo(-6, torsoTopY + 20);
+            ctx.lineTo(6, torsoTopY + 20);
+            ctx.stroke();
+            ctx.strokeStyle = this.color;
+            ctx.lineWidth = thickness;
+        } else {
+            ctx.beginPath();
+            ctx.moveTo(0, torsoTopY);
+            ctx.lineTo(0, torsoBottomY);
+            ctx.stroke();
+        }
 
         const shoulderY = torsoTopY + 5;
         const leftArmEndX = Math.cos(Math.PI / 2 + this.leftArmAngle) * armLength;
@@ -564,7 +317,6 @@ export class StickMan {
         ctx.moveTo(0, shoulderY);
         ctx.lineTo(leftArmEndX, leftArmEndY);
         ctx.stroke();
-
         ctx.beginPath();
         ctx.moveTo(0, shoulderY);
         ctx.lineTo(rightArmEndX, rightArmEndY);
@@ -580,7 +332,6 @@ export class StickMan {
         ctx.moveTo(0, hipY);
         ctx.lineTo(leftLegEndX, leftLegEndY);
         ctx.stroke();
-
         ctx.beginPath();
         ctx.moveTo(0, hipY);
         ctx.lineTo(rightLegEndX, rightLegEndY);
@@ -589,6 +340,8 @@ export class StickMan {
         if (weapon && player) {
             this.drawWeapon(ctx, rightArmEndX, rightArmEndY, this.rightArmAngle, facingDir, weapon, player);
         }
+
+        this.drawAccessory(ctx, 0, headY, headRadius);
 
         ctx.restore();
 
@@ -599,62 +352,86 @@ export class StickMan {
         ctx.restore();
     }
 
+    drawAccessory(ctx, headX, headY, headRadius) {
+        if (!this.accessory) return;
+        ctx.save();
+
+        switch (this.accessory) {
+            case 'crown':
+                ctx.fillStyle = '#FFD700';
+                ctx.shadowColor = '#FFD700';
+                ctx.shadowBlur = 10;
+                ctx.beginPath();
+                ctx.moveTo(headX - 12, headY - headRadius + 2);
+                ctx.lineTo(headX - 12, headY - headRadius - 10);
+                ctx.lineTo(headX - 6, headY - headRadius - 4);
+                ctx.lineTo(headX, headY - headRadius - 14);
+                ctx.lineTo(headX + 6, headY - headRadius - 4);
+                ctx.lineTo(headX + 12, headY - headRadius - 10);
+                ctx.lineTo(headX + 12, headY - headRadius + 2);
+                ctx.closePath();
+                ctx.fill();
+                break;
+
+            case 'helmet':
+                ctx.fillStyle = '#888888';
+                ctx.shadowColor = '#aaaaaa';
+                ctx.shadowBlur = 5;
+                ctx.beginPath();
+                ctx.arc(headX, headY - 2, headRadius + 3, Math.PI, 0);
+                ctx.lineTo(headX + headRadius + 3, headY + 2);
+                ctx.lineTo(headX - headRadius - 3, headY + 2);
+                ctx.closePath();
+                ctx.fill();
+                ctx.strokeStyle = '#666666';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                break;
+
+            case 'cap':
+                ctx.fillStyle = '#cc3333';
+                ctx.shadowBlur = 0;
+                ctx.beginPath();
+                ctx.arc(headX, headY - 3, headRadius + 1, Math.PI, 0);
+                ctx.fill();
+                ctx.fillRect(headX, headY - headRadius - 2, headRadius + 10, 4);
+                break;
+
+            case 'halo':
+                ctx.strokeStyle = '#FFD700';
+                ctx.shadowColor = '#FFD700';
+                ctx.shadowBlur = 15;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.ellipse(headX, headY - headRadius - 12, 14, 5, 0, 0, Math.PI * 2);
+                ctx.stroke();
+                break;
+
+            case 'bandana':
+                ctx.fillStyle = '#cc3333';
+                ctx.shadowBlur = 0;
+                ctx.beginPath();
+                ctx.arc(headX, headY, headRadius + 1, -0.3, Math.PI + 0.3);
+                ctx.fill();
+                ctx.fillRect(headX + headRadius - 2, headY - 2, 12, 3);
+                ctx.fillRect(headX + headRadius + 8, headY, 8, 3);
+                break;
+        }
+        ctx.restore();
+    }
+
     drawWeapon(ctx, handX, handY, armAngle, facingDir, weapon, player) {
         const fd = facingDir;
-        const isAttacking = player && (player.state === 'ATTACK_LIGHT' || player.state === 'ATTACK_HEAVY');
+        const isAttacking = player && (player.state === 'ATTACK_LIGHT' || player.state === 'ATTACK_HEAVY' || player.state === 'ATTACK_AERIAL_LIGHT' || player.state === 'ATTACK_AERIAL_HEAVY');
         const isSlashing = isAttacking && player.attackFrame > 0;
 
-        if (weapon.name === 'Pistol') {
-            ctx.save();
-            ctx.translate(handX, handY);
-            ctx.rotate(armAngle + 0.5);
-            ctx.scale(fd, 1);
-
-            ctx.beginPath();
-            ctx.rect(2, -5, 28, 8);
-            ctx.fillStyle = '#2a2a2a';
-            ctx.fill();
-            ctx.strokeStyle = '#555';
-            ctx.lineWidth = 1;
-            ctx.stroke();
-
-            ctx.beginPath();
-            ctx.rect(2, 3, 11, 16);
-            ctx.fillStyle = '#1a1a1a';
-            ctx.fill();
-            ctx.stroke();
-
-            ctx.beginPath();
-            ctx.arc(8, 6, 6, 0, Math.PI * 0.7);
-            ctx.strokeStyle = '#444';
-            ctx.lineWidth = 1.5;
-            ctx.stroke();
-
-            ctx.beginPath();
-            ctx.moveTo(8, -5);
-            ctx.lineTo(28, -5);
-            ctx.strokeStyle = '#666';
-            ctx.lineWidth = 1;
-            ctx.stroke();
-
-            ctx.beginPath();
-            ctx.rect(28, -6, 4, 10);
-            ctx.fillStyle = '#111';
-            ctx.fill();
-
-            ctx.fillStyle = '#888';
-            ctx.fillRect(22, -8, 4, 3);
-
-            ctx.restore();
-        } else if (weapon.name === 'Katana') {
+        if (weapon.name === 'Katana') {
             ctx.save();
             ctx.translate(handX, handY);
             ctx.rotate(armAngle + 0.3);
             ctx.scale(fd, 1);
-
             ctx.fillStyle = '#1a0a00';
             ctx.fillRect(0, -5, 18, 10);
-
             ctx.strokeStyle = '#4a3000';
             ctx.lineWidth = 1.5;
             for (let i = 0; i < 5; i++) {
@@ -663,7 +440,6 @@ export class StickMan {
                 ctx.lineTo(i * 3 + 4, 5);
                 ctx.stroke();
             }
-
             ctx.fillStyle = '#8B7536';
             ctx.strokeStyle = '#5a4a20';
             ctx.lineWidth = 1;
@@ -671,14 +447,6 @@ export class StickMan {
             ctx.ellipse(18, 0, 7, 9, 0, 0, Math.PI * 2);
             ctx.fill();
             ctx.stroke();
-
-            ctx.beginPath();
-            ctx.moveTo(14, 0); ctx.lineTo(22, 0);
-            ctx.moveTo(18, -9); ctx.lineTo(18, 9);
-            ctx.strokeStyle = '#5a4a20';
-            ctx.lineWidth = 1;
-            ctx.stroke();
-
             ctx.beginPath();
             ctx.moveTo(20, -3);
             ctx.lineTo(90, -1);
@@ -688,28 +456,6 @@ export class StickMan {
             ctx.closePath();
             ctx.fillStyle = '#d0d8e0';
             ctx.fill();
-
-            ctx.beginPath();
-            ctx.moveTo(20, -3);
-            ctx.quadraticCurveTo(55, -4, 95, 0);
-            ctx.strokeStyle = '#f0f5ff';
-            ctx.lineWidth = 1.5;
-            ctx.stroke();
-
-            ctx.beginPath();
-            ctx.moveTo(22, 0);
-            ctx.lineTo(85, 0);
-            ctx.strokeStyle = '#aab5c0';
-            ctx.lineWidth = 0.8;
-            ctx.stroke();
-
-            ctx.beginPath();
-            ctx.moveTo(25, -1.5);
-            ctx.lineTo(80, -1);
-            ctx.strokeStyle = 'rgba(255,255,255,0.6)';
-            ctx.lineWidth = 0.5;
-            ctx.stroke();
-
             if (isSlashing) {
                 ctx.shadowColor = 'rgba(150,220,255,0.9)';
                 ctx.shadowBlur = 20;
@@ -720,150 +466,129 @@ export class StickMan {
                 ctx.quadraticCurveTo(55, -2, 95, 0);
                 ctx.stroke();
             }
-
-            ctx.restore();
-        } else if (weapon.name === 'Baseball Bat') {
-            ctx.save();
-            ctx.translate(handX, handY);
-            ctx.rotate(armAngle + 0.3);
-            ctx.scale(fd, 1);
-
-            ctx.fillStyle = '#111111';
-            ctx.fillRect(0, -4, 16, 8);
-            ctx.strokeStyle = '#333333';
-            ctx.lineWidth = 1;
-            for (let i = 0; i < 4; i++) {
-                ctx.beginPath();
-                ctx.moveTo(i * 4, -4);
-                ctx.lineTo(i * 4 + 2, 4);
-                ctx.stroke();
-            }
-
-            ctx.beginPath();
-            ctx.moveTo(14, -3.5);
-            ctx.lineTo(55, -5);
-            ctx.lineTo(55, 5);
-            ctx.lineTo(14, 3.5);
-            ctx.closePath();
-            ctx.fillStyle = '#8B4513';
-            ctx.fill();
-            ctx.strokeStyle = '#6B3310';
-            ctx.lineWidth = 1;
-            ctx.stroke();
-
-            ctx.beginPath();
-            ctx.moveTo(55, -5);
-            ctx.lineTo(65, -9);
-            ctx.lineTo(65, 9);
-            ctx.lineTo(55, 5);
-            ctx.closePath();
-            ctx.fillStyle = '#7a3c10';
-            ctx.fill();
-
-            ctx.beginPath();
-            ctx.moveTo(65, -9);
-            ctx.lineTo(95, -10);
-            ctx.lineTo(95, 10);
-            ctx.lineTo(65, 9);
-            ctx.closePath();
-            ctx.fillStyle = '#A0522D';
-            ctx.fill();
-
-            ctx.beginPath();
-            ctx.ellipse(95, 0, 3, 10, 0, 0, Math.PI * 2);
-            ctx.fillStyle = '#8B4513';
-            ctx.fill();
-
-            ctx.strokeStyle = 'rgba(60,20,0,0.4)';
-            ctx.lineWidth = 0.8;
-            for (let i = 0; i < 3; i++) {
-                ctx.beginPath();
-                ctx.moveTo(65 + i * 10, -9);
-                ctx.lineTo(65 + i * 10, 9);
-                ctx.stroke();
-            }
-
-            ctx.strokeStyle = player.color || '#ff00ff';
-            ctx.shadowColor = player.color || '#ff00ff';
-            ctx.shadowBlur = 8;
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(8, -5); ctx.lineTo(14, -5);
-            ctx.moveTo(8, 5); ctx.lineTo(14, 5);
-            ctx.stroke();
-
-            if (isSlashing) {
-                ctx.shadowColor = 'rgba(255,200,100,0.8)';
-                ctx.shadowBlur = 25;
-                ctx.strokeStyle = 'rgba(255,200,100,0.4)';
-                ctx.lineWidth = 3;
-                ctx.beginPath();
-                ctx.moveTo(65, 0); ctx.lineTo(95, 0);
-                ctx.stroke();
-            }
-
             ctx.restore();
         } else if (weapon.name === 'Fists') {
-            const isStrikePhase = player && player.state === 'ATTACK_LIGHT' && player.attackFrame >= 5 && player.attackFrame <= 9;
-            const isHeavyStrike = player && player.state === 'ATTACK_HEAVY' && player.attackFrame >= 9 && player.attackFrame <= 14;
-            const radius = isHeavyStrike ? 12 : (isStrikePhase ? 8 : 5);
-            const glow = isStrikePhase || isHeavyStrike;
-
+            const isStrike = player && (player.state === 'ATTACK_LIGHT' || player.state === 'ATTACK_HEAVY') && player.attackFrame > 3;
+            const radius = isStrike ? 8 : 5;
             ctx.save();
-            if (glow) {
-                ctx.shadowColor = player.color;
-                ctx.shadowBlur = 12;
-            }
+            if (isStrike) { ctx.shadowColor = player.color; ctx.shadowBlur = 12; }
             ctx.fillStyle = player.color;
             ctx.beginPath();
             ctx.arc(handX, handY, radius, 0, Math.PI * 2);
             ctx.fill();
             ctx.restore();
+        } else if (weapon.name === 'Portal Gun') {
+            ctx.save();
+            ctx.translate(handX, handY);
+            ctx.rotate(armAngle + 0.5);
+            ctx.scale(fd, 1);
+            ctx.fillStyle = '#333333';
+            ctx.fillRect(0, -6, 30, 12);
+            ctx.fillStyle = '#00ffaa';
+            ctx.fillRect(28, -4, 8, 8);
+            ctx.fillStyle = '#555555';
+            ctx.fillRect(5, -3, 18, 6);
+            ctx.restore();
+        } else if (weapon.name === 'Guitar') {
+            ctx.save();
+            ctx.translate(handX, handY);
+            ctx.rotate(armAngle + 0.4);
+            ctx.scale(fd, 1);
+            ctx.fillStyle = '#8B4513';
+            ctx.beginPath();
+            ctx.ellipse(10, 5, 14, 18, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#6B3310';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            ctx.fillStyle = '#222222';
+            ctx.beginPath();
+            ctx.arc(10, 8, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#cccccc';
+            ctx.lineWidth = 0.5;
+            for (let i = -2; i <= 2; i++) {
+                ctx.beginPath();
+                ctx.moveTo(10 + i * 2, -10);
+                ctx.lineTo(10 + i * 2, 20);
+                ctx.stroke();
+            }
+            ctx.fillStyle = '#555555';
+            ctx.fillRect(-2, -25, 4, 30);
+            if (isSlashing) {
+                ctx.shadowColor = '#ffaa44';
+                ctx.shadowBlur = 15;
+                ctx.strokeStyle = 'rgba(255,170,68,0.5)';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(20, 0, 30, -0.5, 0.5);
+                ctx.stroke();
+            }
+            ctx.restore();
+        } else if (weapon.name === 'Ice Cream') {
+            ctx.save();
+            ctx.translate(handX, handY);
+            ctx.rotate(armAngle + 0.5);
+            ctx.scale(fd, 1);
+            ctx.fillStyle = '#ddaa77';
+            ctx.beginPath();
+            ctx.moveTo(-5, 0);
+            ctx.lineTo(5, 0);
+            ctx.lineTo(0, 18);
+            ctx.closePath();
+            ctx.fill();
+            const scoopColors = ['#ff88aa', '#88ddff', '#ffdd88'];
+            for (let i = 0; i < 3; i++) {
+                ctx.fillStyle = scoopColors[i];
+                ctx.beginPath();
+                ctx.arc(0, -6 - i * 8, 7, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+        } else if (weapon.name === 'Rocket Launcher') {
+            ctx.save();
+            ctx.translate(handX, handY);
+            ctx.rotate(armAngle + 0.5);
+            ctx.scale(fd, 1);
+            ctx.fillStyle = '#444444';
+            ctx.fillRect(0, -6, 40, 12);
+            ctx.fillStyle = '#333333';
+            ctx.fillRect(35, -8, 10, 16);
+            ctx.fillStyle = '#ff4400';
+            ctx.fillRect(5, -3, 30, 2);
+            ctx.restore();
+        } else if (weapon.name === 'Boomerang') {
+            ctx.save();
+            ctx.translate(handX, handY);
+            ctx.rotate(armAngle + (isSlashing ? player.attackFrame * 0.2 : 0.5));
+            ctx.scale(fd, 1);
+            ctx.strokeStyle = '#44ff88';
+            ctx.shadowColor = '#44ff88';
+            ctx.shadowBlur = 8;
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.arc(0, 0, 15, -0.8, Math.PI + 0.8);
+            ctx.stroke();
+            ctx.restore();
         }
     }
 
     drawWounds(ctx, x, y, facingDir, scale, player) {
-        const positions = this.getBodyPartPositions(ctx, x, y, facingDir, scale);
-
         player.wounds.forEach(wound => {
-            let pos;
-            switch (wound.bodyPart) {
-                case 'head': pos = positions.head; break;
-                case 'torso': pos = positions.torso; break;
-                case 'leftArm': pos = positions.leftArm; break;
-                case 'rightArm': pos = positions.rightArm; break;
-                case 'leftLeg': pos = positions.leftLeg; break;
-                case 'rightLeg': pos = positions.rightLeg; break;
-                default: pos = positions.torso;
-            }
-
+            let wx = x + wound.offsetX;
+            let wy = y + wound.offsetY - 45;
             const alpha = wound.age < 200 ? 1.0 : 1.0 - (wound.age - 200) / 100;
-
             ctx.save();
             ctx.globalAlpha = alpha * 0.9;
             ctx.fillStyle = '#8b0000';
             ctx.shadowColor = '#cc0000';
             ctx.shadowBlur = 4;
             ctx.beginPath();
-            ctx.arc(pos.x + wound.offsetX, pos.y + wound.offsetY, wound.size, 0, Math.PI * 2);
+            ctx.arc(wx, wy, wound.size, 0, Math.PI * 2);
             ctx.fill();
-
-            ctx.fillStyle = '#cc0000';
-            ctx.beginPath();
-            ctx.arc(pos.x + wound.offsetX, pos.y + wound.offsetY + wound.size * 1.3, wound.size * 0.6, 0, Math.PI * 2);
-            ctx.fill();
-
-            ctx.globalAlpha = alpha * 0.4;
-            ctx.fillStyle = '#ff4444';
-            ctx.beginPath();
-            ctx.arc(pos.x + wound.offsetX - 1, pos.y + wound.offsetY - 1, wound.size * 0.4, 0, Math.PI * 2);
-            ctx.fill();
-
             ctx.restore();
-
             wound.age++;
         });
-
         player.wounds = player.wounds.filter(w => w.age < w.maxAge);
         if (player.wounds.length > 8) player.wounds.shift();
     }

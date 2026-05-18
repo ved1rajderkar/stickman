@@ -580,6 +580,87 @@ class SoundManager {
         });
     }
 
+    /**
+     * Heavy hit — low booming impact
+     */
+    synthHeavyHit() {
+        if (!this.webAudioReady || this.muted) return;
+        const ctx = this.audioCtx;
+        const t = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(80, t);
+        osc.frequency.exponentialRampToValueAtTime(30, t + 0.3);
+        gain.gain.setValueAtTime(0.5, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.3);
+
+        const bufSize = ctx.sampleRate * 0.15;
+        const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < bufSize; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufSize, 3);
+        const noise = ctx.createBufferSource();
+        noise.buffer = buf;
+        const noiseGain = ctx.createGain();
+        noiseGain.gain.setValueAtTime(0.3, t);
+        noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 500;
+        noise.connect(filter);
+        filter.connect(noiseGain);
+        noiseGain.connect(ctx.destination);
+        noise.start(t);
+    }
+
+    /**
+     * KO — descending dramatic tone
+     */
+    synthKO() {
+        if (!this.webAudioReady || this.muted) return;
+        const ctx = this.audioCtx;
+        const notes = [440, 349.23, 293.66, 220];
+        notes.forEach((freq, i) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            const startTime = ctx.currentTime + i * 0.15;
+            osc.type = 'sawtooth';
+            osc.frequency.value = freq;
+            gain.gain.setValueAtTime(0.3, startTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.3);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(startTime);
+            osc.stop(startTime + 0.3);
+        });
+    }
+
+    /**
+     * Weapon pickup — ascending arpeggio
+     */
+    synthWeaponPickup() {
+        if (!this.webAudioReady || this.muted) return;
+        const ctx = this.audioCtx;
+        const freqs = [523.25, 659.25, 783.99, 1046.50];
+        freqs.forEach((freq, i) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            const startTime = ctx.currentTime + i * 0.06;
+            osc.type = 'square';
+            osc.frequency.value = freq;
+            gain.gain.setValueAtTime(0.15, startTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.12);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(startTime);
+            osc.stop(startTime + 0.12);
+        });
+    }
+
     setVolume(val) {
         this.volume = val / 10;
         Object.values(this.sounds).forEach(s => { try { s.volume = this.volume; } catch (e) {} });
